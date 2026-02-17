@@ -104,3 +104,79 @@ body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', 
   justify-content: center;
   border-radius: 4px;
 }
+
+/* --- 메뉴 및 공통 UI --- */
+.menu-main.vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: 350px;
+}
+
+.menu-btn.large {
+  width: 100%;
+  padding: 25px 0;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+.game-title.small {
+  font-size: 3rem;
+  margin-bottom: 10px;
+}
+
+/* --- 조인 입력창 스타일 --- */
+.join-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.room-code-input {
+  background: #1a1a1a;
+  border: 3px solid var(--gold);
+  border-radius: 10px;
+  color: white;
+  padding: 20px;
+  font-size: 2rem;
+  text-align: center;
+  font-weight: 900;
+  letter-spacing: 5px;
+}
+
+.join-btns {
+  display: flex;
+  gap: 10px;
+}
+
+.join-btns .menu-btn {
+  flex: 1;
+}
+
+/* --- 로비 버튼들 --- */
+.lobby-btns {
+  display: flex;
+  gap: 15px;
+}
+
+/* --- 덱 편집기 보완 --- */
+.mini-formula {
+  background: white;
+  color: black;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin: 5px 0;
+}
+
+.mini-card-name {
+  font-size: 0.7rem;
+  font-weight: bold;
+  text-align: center;
+  background: rgba(0,0,0,0.5);
+  padding: 2px;
+}

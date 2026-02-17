@@ -6,7 +6,8 @@ import { io } from 'socket.io-client';
 import './App.css';
 import { MONSTERS, SPELLS, TRAPS, FIELDS } from './cards';
 
-const socket = io('http://localhost:3001');
+// ★ 중요: Vercel 배포 버전에서는 localhost가 아닌 ngrok 주소를 사용해야 합니다 ★
+const socket = io('https://renate-nonmultiplicative-edgardo.ngrok-free.dev');
 const ALL_CARDS_LIB = [...MONSTERS, ...SPELLS, ...TRAPS, ...FIELDS];
 
 // --- 수학 유틸리티 ---
@@ -24,36 +25,12 @@ const checkDestruction = (formula, activeField) => {
   } catch (e) { return { destroyed: true, reason: 'UNDEFINED' }; }
 };
 
-const inverseMap = {
-  'exp(x)': 'log(x)', 'log(x)': 'exp(x)', 'sin(x)': 'asin(x)', 'cos(x)': 'acos(x)',
-  'x^2': 'sqrt(x)', 'sqrt(x)': 'x^2', 'x': 'x', '1/x': '1/x'
-};
-
-const getMaclaurin = (f) => {
-  if (f.includes('exp')) return '1'; if (f.includes('sin')) return 'x';
-  if (f.includes('cos')) return '1'; if (f.includes('log')) return 'x-1';
-  return f;
-};
-
 const sortCards = (cards) => {
   const priority = { monster: 0, spell: 1, trap: 2, field: 3 };
   return [...cards].sort((a, b) => priority[a.type] - priority[b.type] || a.id.localeCompare(b.id));
 };
 
-// --- 메뉴 컴포넌트 ---
-function Menu({ setView }) {
-  return (
-    <div className="menu-screen">
-      <h1 className="game-title">NABLA MASTERS</h1>
-      <div className="menu-main">
-        <button className="menu-btn large" onClick={() => setView('DUEL_MENU')}>DUEL</button>
-        <button className="menu-btn large" onClick={() => setView('DECK_LIST')}>DECK</button>
-      </div>
-    </div>
-  );
-}
-
-// --- 덱 편집기 컴포넌트 ---
+// --- [컴포넌트] 덱 편집기 ---
 function DeckEditor({ deck, onSave, onBack }) {
   const [currentCards, setCurrentCards] = useState(deck.cards || []);
   const handleAdd = (e, card) => {
@@ -75,8 +52,8 @@ function DeckEditor({ deck, onSave, onBack }) {
       <div className="editor-body">
         <div className="deck-view">
           <h3>MY DECK (Right-Click to Remove)</h3>
-          <div className="mini-grid">{currentCards.map(c => (
-            <div key={c.instanceId} className={`mini-card ${c.type}`} onContextMenu={(e)=>handleRemove(e, c.instanceId)}>
+          <div className="mini-grid">{currentCards.map((c, i) => (
+            <div key={c.instanceId || `deck-item-${i}`} className={`mini-card ${c.type}`} onContextMenu={(e)=>handleRemove(e, c.instanceId)}>
               <span className="mini-card-name">{c.name}</span>
               <div className="mini-formula"><InlineMath math={c.display || c.formula} /></div>
             </div>
@@ -84,8 +61,8 @@ function DeckEditor({ deck, onSave, onBack }) {
         </div>
         <div className="library-view">
           <h3>LIBRARY (Right-Click to Add)</h3>
-          <div className="mini-grid">{ALL_CARDS_LIB.map(c => (
-            <div key={c.id} className={`mini-card ${c.type}`} onContextMenu={(e)=>handleAdd(e, c)}>
+          <div className="mini-grid">{ALL_CARDS_LIB.map((c, i) => (
+            <div key={c.id || `lib-item-${i}`} className={`mini-card ${c.type}`} onContextMenu={(e)=>handleAdd(e, c)}>
               <span className="mini-card-name">{c.name}</span>
               <div className="mini-formula"><InlineMath math={c.display || c.formula} /></div>
             </div>
@@ -96,7 +73,7 @@ function DeckEditor({ deck, onSave, onBack }) {
   );
 }
 
-// --- 메인 앱 컴포넌트 ---
+// --- 메인 앱 ---
 export default function App() {
   const [view, setView] = useState('MENU'); 
   const [decks, setDecks] = useState(JSON.parse(localStorage.getItem('nabla_decks')) || [{id: 'd1', name: 'Starter Deck', cards: []}]);
@@ -105,6 +82,7 @@ export default function App() {
 
   const [roomCode, setRoomCode] = useState("");
   const [inputCode, setInputCode] = useState("");
+  const [showJoinInput, setShowJoinInput] = useState(false); // 조인 입력창 노출 여부
   const [myPlayerNumber, setMyPlayerNumber] = useState(null); 
   const [isPReady, setIsPReady] = useState(false);
   const [isOReady, setIsOReady] = useState(false);
@@ -116,7 +94,6 @@ export default function App() {
   const [notification, setNotification] = useState(""); 
   const [chain, setChain] = useState([]);
   const [selectedAction, setSelectedAction] = useState(null); 
-  const [summonedThisTurn, setSummonedThisTurn] = useState(false);
   const [priorityPlayer, setPriorityPlayer] = useState(0); 
   const [consecutivePasses, setConsecutivePasses] = useState(0); 
   const [doomedIds, setDoomedIds] = useState(new Set());
@@ -142,31 +119,6 @@ export default function App() {
     socket.emit('GAME_ACTION', { roomCode, actionType, data });
   }, [roomCode]);
 
-  // --- 덱 상태 체크 함수 ---
-  const isCardPlayable = useCallback((card, isPlayer) => {
-    if (winner || !isPlayer || selectedAction) return false;
-    if (phase === 'SETUP') return card.type === 'monster' && pMonsters.length < 3;
-    if (priorityPlayer !== myPlayerNumber) return false;
-    if (phase === 'MAIN') {
-      if (card.type === 'monster') return turn === myPlayerNumber && chain.length === 0 && !summonedThisTurn && pMonsters.length < 3;
-      if (card.type === 'spell') return pSpells.length < 3 && (card.effect === 'DRAW' ? pDeck.length >= card.value : true);
-      return (card.type === 'trap' || card.type === 'field') && turn === myPlayerNumber && chain.length === 0 && pSpells.length < 3;
-    }
-    return false;
-  }, [winner, selectedAction, phase, pMonsters.length, priorityPlayer, myPlayerNumber, turn, chain.length, summonedThisTurn, pSpells.length, pDeck.length]);
-
-  const canAct = useCallback((pIdx) => {
-    if (winner || phase === 'SETUP' || phase === 'DISCARD' || selectedAction) return true;
-    const hand = pIdx === myPlayerNumber ? pHand : oHand;
-    const spells = pIdx === myPlayerNumber ? pSpells : oSpells;
-    if (pIdx === turn && chain.length === 0) {
-      if (hand.some(c => c.type === 'monster' ? !summonedThisTurn : spells.length < 3)) return true;
-    }
-    if (spells.some(s => s.isSet && s.setAtTurn < totalTurns)) return true;
-    if (chain.length > 0 && spells.length < 3 && hand.some(c => c.type === 'spell')) return true;
-    return false;
-  }, [winner, phase, selectedAction, myPlayerNumber, pHand, oHand, pSpells, oSpells, turn, chain, summonedThisTurn, totalTurns]);
-
   const setupGame = useCallback((d0, d1, firstTurn) => {
     const myD = myPlayerNumber === 0 ? d0 : d1;
     const opD = myPlayerNumber === 0 ? d1 : d0;
@@ -188,17 +140,7 @@ export default function App() {
       const opId = playerIds.find(id => id !== myId);
       setupGame(allDecks[myId], allDecks[opId], firstTurn);
     });
-    socket.on('OPPONENT_ACTION', ({ actionType, data }) => {
-        switch (actionType) {
-            case 'SETUP_MONSTER': setOMonsters(p => [...p, { ...data.card, isFacedown: true }]); setOHand(p => p.slice(0, -1)); break;
-            case 'READY_SIGNAL': setIsOReady(true); break;
-            case 'START_DUEL_SYNC': setPMonsters(data.pMonsters); setOMonsters(data.oMonsters); setPhase('MAIN'); setTotalTurns(1); showNotification("DUEL START!"); break;
-            case 'PLAY_MONSTER': setOMonsters(p => [...p, data.card]); setOHand(p => p.slice(0, -1)); break;
-            case 'PASS': handlePass(); break;
-            default: break;
-        }
-    });
-    return () => { socket.off('ROOM_CREATED'); socket.off('ROOM_JOINED'); socket.off('GAME_START_SIGNAL'); socket.off('OPPONENT_ACTION'); };
+    return () => { socket.off('ROOM_CREATED'); socket.off('ROOM_JOINED'); socket.off('GAME_START_SIGNAL'); };
   }, [myPlayerNumber, roomCode, setupGame, showNotification]);
 
   const handlePass = useCallback(() => {
@@ -212,7 +154,6 @@ export default function App() {
   }, [chain, turn, myPlayerNumber, priorityPlayer, emit]);
 
   const resolveChain = useCallback(() => {
-    showNotification("RESOLVING...");
     let newPM = [...pMonsters]; let newOM = [...oMonsters];
     let newPS = [...pSpells]; let newOS = [...oSpells];
     let tempChain = [...chain];
@@ -227,46 +168,25 @@ export default function App() {
         else target.formula = res.formula;
       }
     }
-    setTimeout(() => { setPMonsters(newPM); setOMonsters(newOM); setPSpells(newPS); setOSpells(newOS); setChain([]); setPriorityPlayer(turn); }, 800);
-  }, [chain, pMonsters, oMonsters, pSpells, oSpells, activeField, turn, showNotification]);
+    setPMonsters(newPM); setOMonsters(newOM); setPSpells(newPS); setOSpells(newOS);
+    setChain([]); setPriorityPlayer(turn);
+  }, [chain, pMonsters, oMonsters, pSpells, oSpells, activeField, turn]);
 
   useEffect(() => {
-    if (winner || phase === 'SETUP' || phase === 'START' || phase === 'DISCARD' || view !== 'GAME') return;
-    if (!canAct(priorityPlayer) && !selectedAction) handlePass();
+    if (view !== 'GAME' || phase === 'SETUP') return;
     if (consecutivePasses >= 2 && chain.length > 0) resolveChain();
-  }, [priorityPlayer, consecutivePasses, chain, phase, canAct, view, winner, selectedAction, handlePass, resolveChain]);
+  }, [consecutivePasses, chain, view, phase, resolveChain]);
 
-  const handleHandClick = (card, idx, isPlayer) => {
-    if (!isCardPlayable(card, isPlayer)) return;
-    if (phase === 'SETUP') {
-      const newM = { ...card, instanceId: Math.random(), isFacedown: true };
-      setPMonsters([...pMonsters, newM]); setPHand(pHand.filter((_, i) => i !== idx));
-      emit('SETUP_MONSTER', { card: newM }); return;
-    }
-    if (card.type === 'monster') {
-      const newM = { ...card, instanceId: Math.random(), isFacedown: false };
-      setPMonsters([...pMonsters, newM]); setPHand(pHand.filter((_, i) => i !== idx));
-      setSummonedThisTurn(true); emit('PLAY_MONSTER', { card: newM });
-    }
-  };
-
-  const renderCard = (card, isPlayerSide, isFacedown, onClick, isHand = false) => {
-    const isMonster = card.type === 'monster';
-    let mathContent = isMonster ? formatFormula(card.formula) : card.display;
-    const playable = isHand && isCardPlayable(card, isPlayerSide);
-    return (
-      <div key={card.instanceId || Math.random()} className={`card ${card.type} ${isFacedown ? 'back' : (isPlayerSide && card.isSet ? 'facedown' : '')} ${playable ? 'playable' : ''}`} onClick={onClick}>
-        {!isFacedown && (
-          <><span className="name">{card.name}</span>
-            <div className="formula"><div><InlineMath math={mathContent} /></div></div>
-            <span className="type-label">{card.type.toUpperCase()}</span></>
-        )}
+  // --- 뷰 렌더링 함수 ---
+  if (view === 'MENU') return (
+    <div className="menu-screen">
+      <h1 className="game-title">NABLA MASTERS</h1>
+      <div className="menu-main vertical">
+        <button className="menu-btn large" onClick={() => setView('DUEL_MENU')}>DUEL</button>
+        <button className="menu-btn large" onClick={() => setView('DECK_LIST')}>DECK</button>
       </div>
-    );
-  };
-
-  // --- 화면 분기 ---
-  if (view === 'MENU') return <Menu setView={setView} />;
+    </div>
+  );
 
   if (view === 'DECK_LIST') return (
     <div className="menu-screen">
@@ -287,23 +207,40 @@ export default function App() {
 
   if (view === 'DUEL_MENU') return (
     <div className="menu-screen">
-      <h2>DUEL MODE</h2>
-      <div className="menu-options">
-        <button className="menu-btn" onClick={() => setView('ROOM_LOBBY')}>MULTI PLAY</button>
-        <button className="menu-btn" onClick={() => setView('MENU')}>BACK</button>
+      <h1 className="game-title small">SELECT MODE</h1>
+      <div className="menu-main vertical">
+        <button className="menu-btn large" onClick={() => setView('ROOM_LOBBY')}>MULTI PLAY</button>
+        <button className="menu-btn large secondary" disabled>SOLO PLAY (Coming Soon)</button>
+        <button className="menu-btn large" onClick={() => setView('MENU')}>BACK</button>
       </div>
     </div>
   );
 
   if (view === 'ROOM_LOBBY') return (
     <div className="menu-screen">
-      <div className="menu-options">
-        <button className="menu-btn" onClick={() => socket.emit('CREATE_ROOM')}>CREATE ROOM</button>
-        <div className="join-group">
-          <input type="text" placeholder="ROOM CODE" value={inputCode} onChange={(e)=>setInputCode(e.target.value.toUpperCase())} />
-          <button className="menu-btn" onClick={() => socket.emit('JOIN_ROOM', inputCode)}>JOIN</button>
-        </div>
-        <button className="menu-btn" onClick={() => setView('DUEL_MENU')}>BACK</button>
+      <h1 className="game-title small">MULTI PLAY</h1>
+      <div className="menu-main vertical">
+        {!showJoinInput ? (
+          <>
+            <button className="menu-btn large" onClick={() => socket.emit('CREATE_ROOM')}>CREATE ROOM</button>
+            <button className="menu-btn large" onClick={() => setShowJoinInput(true)}>JOIN ROOM</button>
+            <button className="menu-btn large" onClick={() => setView('DUEL_MENU')}>BACK</button>
+          </>
+        ) : (
+          <div className="join-input-container">
+            <input 
+              className="room-code-input"
+              type="text" 
+              placeholder="ENTER ROOM CODE" 
+              value={inputCode} 
+              onChange={(e)=>setInputCode(e.target.value.toUpperCase())} 
+            />
+            <div className="join-btns">
+              <button className="menu-btn primary" onClick={() => socket.emit('JOIN_ROOM', inputCode)}>JOIN</button>
+              <button className="menu-btn" onClick={() => setShowJoinInput(false)}>CANCEL</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -311,9 +248,10 @@ export default function App() {
   if (view === 'LOBBY') return (
     <div className="menu-screen lobby">
       <div className="room-info-header">
-        <p>ROOM CODE: <span className="code-display">{roomCode}</span></p>
+        <p>ROOM CODE</p>
+        <h2 className="code-display">{roomCode}</h2>
       </div>
-      <h2>SELECT DECK & READY</h2>
+      <h2>SELECT DECK</h2>
       <div className="deck-selector">
         {decks.map(d => (
           <div key={d.id} className={`deck-item ${selectedDeckId === d.id ? 'selected' : ''}`} onClick={() => setSelectedDeckId(d.id)}>
@@ -321,13 +259,15 @@ export default function App() {
           </div>
         ))}
       </div>
-      <button className={`menu-btn ${isPReady ? 'ready' : ''}`} onClick={() => {
-        const d = decks.find(d => d.id === selectedDeckId);
-        if (d.cards.length < 40) return alert("덱이 40장 미만입니다.");
-        setIsPReady(true);
-        socket.emit('READY_TO_START', { roomCode, deck: d.cards });
-      }}>{isPReady ? 'READY √' : 'READY TO DUEL'}</button>
-      <button className="menu-btn" onClick={() => setView('ROOM_LOBBY')}>LEAVE</button>
+      <div className="lobby-btns">
+        <button className={`menu-btn ${isPReady ? 'ready' : ''}`} onClick={() => {
+          const d = decks.find(d => d.id === selectedDeckId);
+          if (d.cards.length < 40) return alert("덱은 최소 40장이어야 합니다.");
+          setIsPReady(true);
+          socket.emit('READY_TO_START', { roomCode, deck: d.cards });
+        }}>{isPReady ? 'READY √' : 'READY TO DUEL'}</button>
+        <button className="menu-btn" onClick={() => window.location.reload()}>LEAVE</button>
+      </div>
     </div>
   );
 
