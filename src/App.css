@@ -96,3 +96,31 @@ body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', 
 /* 애니메이션 */
 .phase-notification { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 5rem; font-weight: 900; animation: fadeInOut 1.5s forwards; z-index: 1000; }
 @keyframes fadeInOut { 0% { opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 덱 매수 표시 스타일 */
+.deck-info {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid var(--gold);
+  padding: 5px 15px;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: var(--gold);
+  z-index: 110;
+}
+
+.opponent-deck { top: 110%; right: 10%; }
+.player-deck { bottom: 110%; left: 10%; }
+
+/* 패 컨테이너 상대 위치 설정 (덱 정보 기준점) */
+.hand-container {
+  position: relative;
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: center;
+  gap: 8px;
+  height: 16vh;
+  width: 100%;
+  align-items: center;
+}
