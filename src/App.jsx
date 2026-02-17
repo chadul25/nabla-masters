@@ -6,12 +6,19 @@ import { io } from 'socket.io-client';
 import './App.css';
 import { MONSTERS, SPELLS, TRAPS, FIELDS } from './cards';
 
-// App.jsx 상단 소켓 설정 부분
+// 1. 현재 접속한 브라우저 주소가 localhost인지 확인
 const isLocal = window.location.hostname === 'localhost';
+
+// 2. 주소 설정 (Vercel에서는 반드시 https 로 시작하는 ngrok 주소여야 함)
 const socket = io(isLocal 
   ? 'http://localhost:3001' 
-  : 'https://renate-nonmultiplicative-edgardo.ngrok-free.dev'
+  : 'https://renate-nonmultiplicative-edgardo.ngrok-free.dev', // ← 여기 본인의 실제 ngrok 주소인지 다시 확인!
+  {
+    transports: ['websocket'], // 연결 안정성을 위해 추가
+    withCredentials: true
+  }
 );
+
 const ALL_CARDS_LIB = [...MONSTERS, ...SPELLS, ...TRAPS, ...FIELDS];
 
 // --- [A] 유틸리티 ---
