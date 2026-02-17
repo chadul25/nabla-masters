@@ -10,7 +10,6 @@ body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', 
 .menu-screen { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
 .game-title { font-size: 5rem; color: var(--gold); text-shadow: 0 0 20px rgba(241, 196, 15, 0.5); }
 .game-title.small { font-size: 3rem; }
-.menu-main.vertical { display: flex; flex-direction: column; gap: 15px; width: 350px; }
 .menu-btn { padding: 15px 40px; font-size: 1.2rem; cursor: pointer; background: #1a1a1a; color: white; border: 2px solid #333; border-radius: 10px; transition: 0.2s; }
 .menu-btn.large { padding: 25px; font-size: 1.5rem; font-weight: 900; border-color: var(--gold); }
 .menu-btn:hover { background: #222; border-color: var(--gold); }
@@ -27,7 +26,6 @@ body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', 
 .editor-body { display: flex; flex: 1; gap: 20px; overflow: hidden; padding-top: 15px; }
 .deck-view, .library-view { flex: 1; display: flex; flex-direction: column; background: rgba(255, 255, 255, 0.03); border-radius: 15px; padding: 15px; overflow: hidden; }
 .editor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 15px; overflow-y: auto; }
-.editor-card-wrapper { transform: scale(0.85); height: 160px; display: flex; justify-content: center; }
 
 /* 카드 공통 디자인 */
 .card {
@@ -60,3 +58,96 @@ body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', 
 .phase-notification { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 5rem; font-weight: 900; animation: fadeInOut 1.5s forwards; z-index: 1000; }
 @keyframes fadeInOut { 0% { opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+/* --- [신규] 덱 리스트 화면 스타일 --- */
+.deck-list-view {
+  padding: 40px;
+  justify-content: flex-start !important; /* 위쪽부터 정렬 */
+}
+
+.deck-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* 덱 상자 크기 고정 및 자동 줄바꿈 */
+  gap: 25px;
+  width: 80%;
+  max-width: 1000px;
+  margin: 30px 0;
+  padding: 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.deck-slot {
+  height: 140px;
+  background: linear-gradient(145deg, #1e1e1e, #121212);
+  border: 2px solid #333;
+  border-radius: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.deck-slot:hover {
+  border-color: var(--gold);
+  transform: translateY(-5px);
+  background: #252525;
+  box-shadow: 0 10px 25px rgba(241, 196, 15, 0.2);
+}
+
+.deck-slot-name {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.deck-slot-count {
+  font-size: 0.9rem;
+  color: var(--gold);
+  opacity: 0.8;
+}
+
+.add-new {
+  border-style: dashed;
+  border-width: 3px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #555;
+}
+
+.add-new:hover {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+/* 스크롤바 커스텀 */
+.deck-grid::-webkit-scrollbar { width: 8px; }
+.deck-grid::-webkit-scrollbar-track { background: #000; }
+.deck-grid::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+.deck-grid::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 15px;
+  padding: 10px;
+}
+
+.editor-card-wrapper {
+  width: 100px;
+  height: 145px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* 덱 편집기에서는 카드를 조금 더 작게 (85% 수준) */
+  transform: scale(0.85);
+}
+
+.menu-main.vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
