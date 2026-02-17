@@ -6,7 +6,7 @@ import { io } from 'socket.io-client';
 import './App.css';
 import { MONSTERS, SPELLS, TRAPS, FIELDS } from './cards';
 
-// --- [A] 서버 연결 설정 (자동 감지) ---
+// --- [1] 서버 연결 설정 (자동 감지) ---
 const isLocal = window.location.hostname === 'localhost';
 const socket = io(isLocal 
   ? 'http://localhost:3001' 
@@ -16,7 +16,7 @@ const socket = io(isLocal
 
 const ALL_CARDS_LIB = [...MONSTERS, ...SPELLS, ...TRAPS, ...FIELDS];
 
-// --- [B] 수학 유틸리티 ---
+// --- [2] 전역 수학 유틸리티 ---
 const formatFormula = (formula) => {
   try { return parse(simplify(formula).toString()).toTex(); } catch (e) { return formula; }
 };
@@ -36,7 +36,18 @@ const sortCards = (cards) => {
   return [...cards].sort((a, b) => p[a.type] - p[b.type] || a.id.localeCompare(b.id));
 };
 
-// --- [C] 공통 카드 UI ---
+const inverseMap = {
+  'exp(x)': 'log(x)', 'log(x)': 'exp(x)', 'sin(x)': 'asin(x)', 'cos(x)': 'acos(x)',
+  'x^2': 'sqrt(x)', 'sqrt(x)': 'x^2', 'x': 'x', '1/x': '1/x'
+};
+
+const getMaclaurin = (f) => {
+  if (f.includes('exp')) return '1'; if (f.includes('sin')) return 'x';
+  if (f.includes('cos')) return '1'; if (f.includes('log')) return 'x-1';
+  return f;
+};
+
+// --- [3] 서브 컴포넌트: 카드 UI ---
 function CardUI({ card, isFacedown, isPlayerSide, isPlayable, isHover, onClick, onContextMenu, className }) {
   const isMonster = card.type === 'monster';
   const mathContent = isMonster ? formatFormula(card.formula) : card.display;
@@ -57,7 +68,23 @@ function CardUI({ card, isFacedown, isPlayerSide, isPlayable, isHover, onClick, 
   );
 }
 
-// --- [D] 덱 편집기 ---
+// --- [4] 서브 컴포넌트: 메인 메뉴 (ReferenceError 해결) ---
+function Menu({ setView, isConnected }) {
+  return (
+    <div className="menu-screen">
+      <h1 className="game-title">NABLA MASTERS</h1>
+      <div className="menu-main vertical">
+        <button className="menu-btn large" onClick={() => setView('DUEL_MENU')}>DUEL</button>
+        <button className="menu-btn large" onClick={() => setView('DECK_LIST')}>DECK</button>
+      </div>
+      <div className={`connection-status ${isConnected ? 'on' : 'off'}`}>
+        Server: {isConnected ? "CONNECTED" : "DISCONNECTED"}
+      </div>
+    </div>
+  );
+}
+
+// --- [5] 서브 컴포넌트: 덱 편집기 ---
 function DeckEditor({ deck, onSave, onBack }) {
   const [currentCards, setCurrentCards] = useState(deck.cards || []);
   const handleAdd = (e, card) => {
@@ -73,7 +100,10 @@ function DeckEditor({ deck, onSave, onBack }) {
     <div className="deck-editor" onContextMenu={(e)=>e.preventDefault()}>
       <div className="editor-header">
         <h2>{deck.name} ({currentCards.length}/60)</h2>
-        <div className="header-btns"><button className="menu-btn primary" onClick={() => onSave(currentCards)}>SAVE</button><button className="menu-btn" onClick={onBack}>BACK</button></div>
+        <div className="header-btns">
+          <button className="menu-btn primary" onClick={() => onSave(currentCards)}>SAVE</button>
+          <button className="menu-btn" onClick={onBack}>BACK</button>
+        </div>
       </div>
       <div className="editor-body">
         <div className="deck-view"><h3>MY DECK (Right-Click Remove)</h3><div className="editor-grid">{currentCards.map((c,i)=><div key={c.instanceId||i} className="editor-card-wrapper"><CardUI card={c} onContextMenu={(e)=>handleRemove(e, c.instanceId)}/></div>)}</div></div>
@@ -83,7 +113,7 @@ function DeckEditor({ deck, onSave, onBack }) {
   );
 }
 
-// --- [E] 메인 앱 ---
+// --- [6] 메인 앱 컴포넌트 ---
 export default function App() {
   const [view, setView] = useState('MENU'); 
   const [isConnected, setIsConnected] = useState(socket.connected);
@@ -107,29 +137,12 @@ export default function App() {
   const [selectedAction, setSelectedAction] = useState(null); 
   const [priorityPlayer, setPriorityPlayer] = useState(0); 
   const [consecutivePasses, setConsecutivePasses] = useState(0); 
-  const [doomedIds, setDoomedIds] = useState(new Set());
   const [pDeck, setPDeck] = useState([]); const [pHand, setPHand] = useState([]); const [pMonsters, setPMonsters] = useState([]); const [pSpells, setPSpells] = useState([]);
   const [oDeck, setODeck] = useState([]); const [oHand, setOHand] = useState([]); const [oMonsters, setOMonsters] = useState([]); const [oSpells, setOSpells] = useState([]);
   const [activeField, setActiveField] = useState(null);
 
   const showNotification = useCallback((msg) => { setNotification(msg); setTimeout(() => setNotification(""), 1500); }, []);
   const emit = useCallback((type, data) => socket.emit('GAME_ACTION', { roomCode, actionType: type, data }), [roomCode]);
-
-  const handleEndTurn = useCallback(() => {
-    const nextTurn = turn === 0 ? 1 : 0;
-    setTurn(nextTurn); setTotalTurns(t => t + 1); setPriorityPlayer(nextTurn);
-    showNotification("NEXT TURN");
-    if (myPlayerNumber === turn) emit('PASS', {});
-  }, [turn, myPlayerNumber, emit, showNotification]);
-
-  const handlePass = useCallback(() => {
-    if (chain.length === 0 && turn === myPlayerNumber && priorityPlayer === myPlayerNumber) {
-      handleEndTurn(); return;
-    }
-    setConsecutivePasses(prev => prev + 1);
-    setPriorityPlayer(priorityPlayer === 0 ? 1 : 0);
-    if (priorityPlayer === myPlayerNumber) emit('PASS', {});
-  }, [chain, turn, myPlayerNumber, priorityPlayer, emit, handleEndTurn]);
 
   const isCardPlayable = useCallback((card, isPlayer) => {
     if (winner || !isPlayer || selectedAction) return false;
@@ -142,6 +155,21 @@ export default function App() {
     }
     return false;
   }, [winner, selectedAction, phase, pMonsters.length, priorityPlayer, myPlayerNumber, turn, chain.length, pSpells.length]);
+
+  const handleEndTurn = useCallback(() => {
+    const nextTurn = turn === 0 ? 1 : 0;
+    setTurn(nextTurn); setTotalTurns(t => t + 1); setPriorityPlayer(nextTurn);
+    showNotification("NEXT TURN");
+    if (myPlayerNumber === turn) emit('PASS', {});
+  }, [turn, myPlayerNumber, emit, showNotification]);
+
+  const handlePass = useCallback(() => {
+    if (chain.length === 0 && turn === myPlayerNumber && priorityPlayer === myPlayerNumber) {
+      handleEndTurn(); return;
+    }
+    setPriorityPlayer(priorityPlayer === 0 ? 1 : 0);
+    if (priorityPlayer === myPlayerNumber) emit('PASS', {});
+  }, [chain, turn, myPlayerNumber, priorityPlayer, emit, handleEndTurn]);
 
   const resolveChain = useCallback(() => {
     showNotification("RESOLVING...");
@@ -162,7 +190,7 @@ export default function App() {
     setTimeout(() => { setPMonsters(newPM); setOMonsters(newOM); setPSpells(newPS); setOSpells(newOS); setChain([]); setPriorityPlayer(turn); }, 800);
   }, [chain, pMonsters, oMonsters, pSpells, oSpells, activeField, turn, showNotification]);
 
-  // --- [멀티플레이 소켓 설정] ---
+  // --- 소켓 연동 ---
   useEffect(() => {
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
@@ -223,8 +251,9 @@ export default function App() {
     }
   }, [isPReady, isOReady, myPlayerNumber, pMonsters, oMonsters, emit, showNotification, phase]);
 
-  // --- [F] 화면 렌더링 분기 ---
+  // --- 화면 렌더링 조건부 분기 ---
   if (view === 'MENU') return <Menu setView={setView} isConnected={isConnected} />;
+  
   if (view === 'DECK_LIST') return (
     <div className="menu-screen deck-list-view">
       <h1 className="game-title small">MY DECKS</h1>
@@ -240,21 +269,25 @@ export default function App() {
       <button className="menu-btn" onClick={() => setView('MENU')}>BACK TO MENU</button>
     </div>
   );
+
   if (view === 'DECK_EDITOR') return <DeckEditor deck={editingDeck} onBack={() => setView('DECK_LIST')} onSave={(c) => { setDecks(decks.map(d => d.id === editingDeck.id ? {...d, cards: c} : d)); setView('DECK_LIST'); }} />;
+
   if (view === 'DUEL_MENU') return (
     <div className="menu-screen"><h1 className="game-title small">DUEL MODE</h1><div className="menu-main vertical"><button className="menu-btn large" onClick={() => setView('ROOM_LOBBY')}>MULTI PLAY</button><button className="menu-btn large" onClick={() => setView('MENU')}>BACK</button></div></div>
   );
+
   if (view === 'ROOM_LOBBY') return (
     <div className="menu-screen"><h1 className="game-title small">MULTI PLAY</h1><div className="menu-main vertical">
       {!showJoinInput ? (<><button className="menu-btn large" onClick={() => socket.emit('CREATE_ROOM')}>CREATE ROOM</button><button className="menu-btn large" onClick={() => setShowJoinInput(true)}>JOIN ROOM</button><button className="menu-btn large" onClick={() => setView('DUEL_MENU')}>BACK</button></>) : 
       (<div className="join-input-container"><input className="room-code-input" type="text" placeholder="ENTER CODE" value={inputCode} onChange={(e)=>setInputCode(e.target.value.toUpperCase())} /><div className="join-btns"><button className="menu-btn primary" onClick={() => socket.emit('JOIN_ROOM', inputCode)}>JOIN</button><button className="menu-btn" onClick={() => setShowJoinInput(false)}>CANCEL</button></div></div>)}
     </div></div>
   );
+
   if (view === 'LOBBY') return (
     <div className="menu-screen lobby">
       <div className="room-info-header"><p>ROOM CODE</p><h2 className="code-display">{roomCode}</h2></div>
       <div className="deck-selector">
-        {decks.map(d => (<div key={d.id} className={`deck-item ${selectedDeckId === d.id ? 'selected' : ''}`} onClick={() => setSelectedDeckId(d.id)}>{d.name} ({d.cards.length} cards)</div>))}
+        {decks.map(d => (<div key={d.id} className={`deck-item ${selectedDeckId === d.id ? 'selected' : ''}`} onClick={() => setSelectedDeckId(d.id)}>{d.name} ({d.cards.length})</div>))}
       </div>
       <div className="lobby-btns">
         <button className={`menu-btn ${isPReady ? 'ready' : ''}`} onClick={() => {
@@ -267,6 +300,7 @@ export default function App() {
     </div>
   );
 
+  // --- 실제 게임 화면 (view === 'GAME') ---
   return (
     <div className="game-container">
       {notification && <div className="phase-notification">{notification}</div>}
@@ -274,7 +308,7 @@ export default function App() {
       <div className="main-arena">
         <div className="duel-board">
           <div className="zone spell-zone opponent-side">{[0,1,2].map(i => (<div key={`os-${i}`} className="slot">{oSpells[i] && <div className="card back" />}</div>))}</div>
-          <div className="zone monster-zone opponent-side">{[0,1,2].map(i => (<div key={`om-${i}`} className="slot">{oMonsters[i] && <CardUI card={oMonsters[i]} isFacedown={oMonsters[i].isFacedown} />}</div>))}</div>
+          <div className="zone monster-zone opponent-side">{[0,1,2].map(i => (<div key={`om-${i}`} className="slot">{oMonsters[i] && renderCard(oMonsters[i], false, oMonsters[i].isFacedown, null)}</div>))}</div>
           <div className="center-divider">
             <div className="field-anchor"><div className="slot field-slot">{activeField ? <CardUI card={activeField} /> : 'FIELD'}</div></div>
             <div className={`turn-priority-tab ${turn === myPlayerNumber ? "player-turn" : "opponent-turn"}`}>
@@ -283,11 +317,12 @@ export default function App() {
               <button className="pass-btn" onClick={handlePass} disabled={priorityPlayer !== myPlayerNumber}>PASS</button>}
             </div>
           </div>
-          <div className="zone monster-zone player-side">{[0,1,2].map(i => (<div key={`pm-${i}`} className="slot">{pMonsters[i] && <CardUI card={pMonsters[i]} isPlayerSide={true} isFacedown={pMonsters[i].isFacedown} />}</div>))}</div>
-          <div className="zone spell-zone player-side">{[0,1,2].map(i => (<div key={`ps-${i}`} className="slot">{pSpells[i] && <CardUI card={pSpells[i]} isPlayerSide={true} />}</div>))}</div>
+          <div className="zone monster-zone player-side">{[0,1,2].map(i => (<div key={`pm-${i}`} className="slot">{pMonsters[i] && renderCard(pMonsters[i], true, pMonsters[i].isFacedown, null)}</div>))}</div>
+          <div className="zone spell-zone player-side">{[0,1,2].map(i => <div key={`ps-${i}`} className="slot">{pSpells[i] && renderCard(pSpells[i], true, false, null)}</div>)}</div>
         </div>
       </div>
       <div className="hand-container bottom">{pHand.map((c, i) => <CardUI key={`ph-${i}`} card={c} isPlayerSide={true} isPlayable={isCardPlayable(c, true)} onClick={() => handleHandClick(c, i, true)} />)}</div>
+      <button className="menu-exit-btn" onClick={() => window.location.reload()}>SURRENDER</button>
     </div>
   );
 }
