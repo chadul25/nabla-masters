@@ -16,7 +16,7 @@ const socket = io(isLocal
 
 const ALL_CARDS_LIB = [...MONSTERS, ...SPELLS, ...TRAPS, ...FIELDS];
 
-// --- [B] 전역 수학 유틸리티 ---
+// --- [B] 전역 수학 및 도우미 함수 (Hoisting 방지) ---
 const formatFormula = (formula) => {
   try { return parse(simplify(formula).toString()).toTex(); } catch (e) { return formula; }
 };
@@ -36,22 +36,24 @@ const sortCards = (cards) => {
   return [...cards].sort((a, b) => p[a.type] - p[b.type] || a.id.localeCompare(b.id));
 };
 
+const inverseMap = {
+  'exp(x)': 'log(x)', 'log(x)': 'exp(x)', 'sin(x)': 'asin(x)', 'cos(x)': 'acos(x)',
+  'x^2': 'sqrt(x)', 'sqrt(x)': 'x^2', 'x': 'x', '1/x': '1/x'
+};
+
 // --- [C] 메인 앱 컴포넌트 ---
 export default function App() {
-  // 1. 상태 선언
   const [view, setView] = useState('MENU'); 
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [decks, setDecks] = useState(JSON.parse(localStorage.getItem('nabla_decks')) || [{id: 'd1', name: 'Starter Deck', cards: []}]);
   const [editingDeck, setEditingDeck] = useState(null);
   const [selectedDeckId, setSelectedDeckId] = useState(decks[0]?.id);
-
   const [roomCode, setRoomCode] = useState("");
   const [inputCode, setInputCode] = useState("");
   const [showJoinInput, setShowJoinInput] = useState(false);
   const [myPlayerNumber, setMyPlayerNumber] = useState(null); 
   const [isPReady, setIsPReady] = useState(false);
   const [isOReady, setIsOReady] = useState(false);
-
   const [phase, setPhase] = useState('START'); 
   const [turn, setTurn] = useState(0); 
   const [totalTurns, setTotalTurns] = useState(1); 
@@ -64,17 +66,9 @@ export default function App() {
   const [pDeck, setPDeck] = useState([]); const [pHand, setPHand] = useState([]); const [pMonsters, setPMonsters] = useState([]); const [pSpells, setPSpells] = useState([]);
   const [oDeck, setODeck] = useState([]); const [oHand, setOHand] = useState([]); const [oMonsters, setOMonsters] = useState([]); const [oSpells, setOSpells] = useState([]);
   const [activeField, setActiveField] = useState(null);
-  const [doomedIds, setDoomedIds] = useState(new Set());
   const [summonedThisTurn, setSummonedThisTurn] = useState(false);
 
-  // 2. 핵심 함수 (참조 오류 방지를 위해 최상단 정의)
-  const showNotification = useCallback((msg) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(""), 1500);
-  }, []);
-
-  const emit = useCallback((type, data) => socket.emit('GAME_ACTION', { roomCode, actionType: type, data }), [roomCode]);
-
+  // --- [D] 렌더링 도우미 (참조 에러 방지를 위해 App 내부에 배치) ---
   const isCardPlayable = useCallback((card, isPlayer) => {
     if (winner || !isPlayer || selectedAction) return false;
     if (phase === 'SETUP') return card.type === 'monster' && pMonsters.length < 3;
@@ -110,6 +104,13 @@ export default function App() {
     );
   };
 
+  const showNotification = useCallback((msg) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(""), 1500);
+  }, []);
+
+  const emit = useCallback((type, data) => socket.emit('GAME_ACTION', { roomCode, actionType: type, data }), [roomCode]);
+
   const handleEndTurn = useCallback(() => {
     const nextTurn = turn === 0 ? 1 : 0;
     setTurn(nextTurn); setTotalTurns(t => t + 1); setPriorityPlayer(nextTurn);
@@ -123,7 +124,7 @@ export default function App() {
     }
     setPriorityPlayer(priorityPlayer === 0 ? 1 : 0);
     if (priorityPlayer === myPlayerNumber) emit('PASS', {});
-  }, [chain, turn, myPlayerNumber, priorityPlayer, emit, handleEndTurn]);
+  }, [chain.length, turn, myPlayerNumber, priorityPlayer, handleEndTurn, emit]);
 
   const resolveChain = useCallback(() => {
     showNotification("RESOLVING...");
@@ -179,7 +180,6 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem('nabla_decks', JSON.stringify(decks)); }, [decks]);
 
-  // --- 이벤트 핸들러 ---
   const handleHandClick = (card, idx, isPlayer) => {
     if (!isCardPlayable(card, isPlayer)) return;
     if (phase === 'SETUP') {
@@ -208,7 +208,7 @@ export default function App() {
     }
   }, [isPReady, isOReady, myPlayerNumber, pMonsters, oMonsters, emit, showNotification, phase]);
 
-  // --- 뷰 렌더링 함수들 ---
+  // --- [E] 화면 렌더링 분기 ---
   if (view === 'MENU') return (
     <div className="menu-screen">
       <h1 className="game-title">NABLA MASTERS</h1>
@@ -303,8 +303,8 @@ export default function App() {
           <div className="join-input-container">
             <input className="room-code-input" type="text" placeholder="CODE" value={inputCode} onChange={(e)=>setInputCode(e.target.value.toUpperCase())} />
             <div className="join-btns">
-              <button className="menu-btn large primary" onClick={() => socket.emit('JOIN_ROOM', inputCode)}>JOIN</button>
-              <button className="menu-btn large" onClick={() => setShowJoinInput(false)}>CANCEL</button>
+              <button className="menu-btn primary" onClick={() => socket.emit('JOIN_ROOM', inputCode)}>JOIN</button>
+              <button className="menu-btn" onClick={() => setShowJoinInput(false)}>CANCEL</button>
             </div>
           </div>
         )}
@@ -315,8 +315,13 @@ export default function App() {
   if (view === 'LOBBY') return (
     <div className="menu-screen lobby">
       <div className="room-info-header"><p>ROOM CODE</p><h2 className="code-display">{roomCode}</h2></div>
+      <h2>SELECT DECK</h2>
       <div className="deck-selector">
-        {decks.map(d => (<div key={d.id} className={`deck-item ${selectedDeckId === d.id ? 'selected' : ''}`} onClick={() => setSelectedDeckId(d.id)}>{d.name} ({d.cards.length})</div>))}
+        {decks.map(d => (
+          <div key={d.id} className={`deck-item ${selectedDeckId === d.id ? 'selected' : ''}`} onClick={() => setSelectedDeckId(d.id)}>
+            {d.name} ({d.cards.length} cards)
+          </div>
+        ))}
       </div>
       <div className="lobby-btns">
         <button className={`menu-btn large ${isPReady ? 'ready' : ''}`} onClick={() => {
@@ -329,7 +334,7 @@ export default function App() {
     </div>
   );
 
-  // --- 인게임 화면 ---
+  // --- 실제 게임 화면 ---
   return (
     <div className="game-container">
       {notification && <div className="phase-notification">{notification}</div>}
