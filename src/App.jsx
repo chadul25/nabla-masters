@@ -6,16 +6,11 @@ import { io } from 'socket.io-client';
 import './App.css';
 import { MONSTERS, SPELLS, TRAPS, FIELDS } from './cards';
 
-// --- [A] 서버 연결 설정 ---
 const isLocal = window.location.hostname === 'localhost';
-const socket = io(isLocal 
-  ? 'http://localhost:3001' 
-  : 'https://renate-nonmultiplicative-edgardo.ngrok-free.dev', 
-  { transports: ['websocket'] }
-);
+const socket = io(isLocal ? 'http://localhost:3001' : 'https://renate-nonmultiplicative-edgardo.ngrok-free.dev', { transports: ['websocket'] });
 const ALL_CARDS_LIB = [...MONSTERS, ...SPELLS, ...TRAPS, ...FIELDS];
 
-// --- [B] 전역 수학 및 유틸리티 함수 ---
+// --- 수학 유틸리티 ---
 const formatFormula = (formula) => {
   try { return parse(simplify(formula).toString()).toTex(); } catch (e) { return formula; }
 };
@@ -44,16 +39,13 @@ const shuffleDeck = (array) => {
   return newArr;
 };
 
-// --- [C] 공통 카드 UI 컴포넌트 ---
+// --- 카드 UI 컴포넌트 ---
 function CardUI({ card, isFacedown, isPlayerSide, isPlayable, onClick, onContextMenu, className }) {
   if (!card) return null;
   const isMonster = card.type === 'monster';
   const mathContent = isMonster ? formatFormula(card.formula) : card.display;
   return (
-    <div 
-      className={`card ${card.type} ${isFacedown ? 'back' : (isPlayerSide && card.isSet ? 'facedown peekable' : '')} ${isPlayable ? 'playable' : ''} ${className || ''}`}
-      onClick={onClick} onContextMenu={onContextMenu}
-    >
+    <div className={`card ${card.type} ${isFacedown ? 'back' : (isPlayerSide && card.isSet ? 'facedown peekable' : '')} ${isPlayable ? 'playable' : ''} ${className || ''}`} onClick={onClick} onContextMenu={onContextMenu}>
       {!isFacedown && (
         <><span className="card-name">{card.name}</span>
           <div className="card-formula"><div><InlineMath math={mathContent} /></div></div>
@@ -63,81 +55,7 @@ function CardUI({ card, isFacedown, isPlayerSide, isPlayable, onClick, onContext
   );
 }
 
-// --- [D] 서브 컴포넌트: 메뉴 (연결 UI 복구) ---
-function Menu({ setView, isConnected, showJoinInput, setShowJoinInput, inputCode, setInputCode, onJoin }) {
-  return (
-    <div className="menu-screen">
-      <h1 className="game-title">NABLA MASTERS</h1>
-      <div className="menu-main vertical">
-        {!showJoinInput ? (
-          <>
-            <button className="menu-btn large" onClick={() => setView('DUEL_MENU')}>DUEL</button>
-            <button className="menu-btn large" onClick={() => setView('DECK_LIST')}>DECK</button>
-          </>
-        ) : (
-          <div className="join-input-container">
-            <input className="room-code-input" type="text" placeholder="ENTER CODE" value={inputCode} onChange={(e) => setInputCode(e.target.value.toUpperCase())} />
-            <div className="join-btns">
-              <button className="menu-btn primary" onClick={onJoin}>JOIN</button>
-              <button className="menu-btn" onClick={() => setShowJoinInput(false)}>CANCEL</button>
-            </div>
-          </div>
-        )}
-      </div>
-      <div className={`connection-status ${isConnected ? 'on' : 'off'}`}>
-        Server: {isConnected ? "CONNECTED" : "DISCONNECTED"}
-      </div>
-    </div>
-  );
-}
-
-// --- [E] 서브 컴포넌트: 덱 편집기 (UI 구조 고정) ---
-function DeckEditor({ deck, onSave, onBack }) {
-  const [currentCards, setCurrentCards] = useState(deck.cards || []);
-  const handleAdd = (e, card) => {
-    e.preventDefault();
-    if (currentCards.length >= 60) return;
-    const count = currentCards.filter(c => c.id === card.id).length;
-    if (count >= 4) { alert("동일 카드 4장 제한"); return; }
-    setCurrentCards(sortCards([...currentCards, { ...card, instanceId: Math.random() }]));
-  };
-  const handleRemove = (e, instId) => {
-    e.preventDefault();
-    setCurrentCards(currentCards.filter(c => c.instanceId !== instId));
-  };
-  return (
-    <div className="deck-editor" onContextMenu={(e)=>e.preventDefault()}>
-      <div className="editor-header">
-        <h2>{deck.name} ({currentCards.length}/60)</h2>
-        <div className="header-btns"><button className="menu-btn primary" onClick={() => onSave(currentCards)}>SAVE</button><button className="menu-btn" onClick={onBack}>BACK</button></div>
-      </div>
-      <div className="editor-body">
-        <div className="deck-view">
-          <h3 className="section-title">MY DECK</h3>
-          <div className="editor-grid">
-            {currentCards.map((c, i) => (
-              <div key={c.instanceId || `deck-${i}`} className="editor-card-wrapper" onContextMenu={(e) => handleRemove(e, c.instanceId)}>
-                <CardUI card={c} isPlayerSide={true} />
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="library-view">
-          <h3 className="section-title">CARD LIBRARY</h3>
-          <div className="editor-grid">
-            {ALL_CARDS_LIB.map((c, i) => (
-              <div key={c.id || `lib-${i}`} className="editor-card-wrapper" onContextMenu={(e) => handleAdd(e, c)}>
-                <CardUI card={c} isPlayerSide={true} />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- [F] 메인 앱 컴포넌트 ---
+// --- 메인 앱 ---
 export default function App() {
   const [view, setView] = useState('MENU'); 
   const [isConnected, setIsConnected] = useState(socket.connected);
@@ -148,6 +66,7 @@ export default function App() {
   const [inputCode, setInputCode] = useState("");
   const [showJoinInput, setShowJoinInput] = useState(false);
   const [myPlayerNumber, setMyPlayerNumber] = useState(null); 
+  const [playerCount, setPlayerCount] = useState(0); // 현재 방 인원
   const [isPReady, setIsPReady] = useState(false);
   const [isOReady, setIsOReady] = useState(false);
   const [phase, setPhase] = useState('START'); 
@@ -167,33 +86,44 @@ export default function App() {
   const showNotification = useCallback((msg) => { setNotification(msg); setTimeout(() => setNotification(""), 1500); }, []);
   const emit = useCallback((type, data) => socket.emit('GAME_ACTION', { roomCode, actionType: type, data }), [roomCode]);
 
-  const isCardPlayable = useCallback((card, isPlayer) => {
-    if (winner || !isPlayer || selectedAction) return false;
-    if (phase === 'SETUP') return card.type === 'monster' && pMonsters.length < 3;
-    if (priorityPlayer !== myPlayerNumber) return false;
-    if (phase === 'MAIN') {
-      if (card.type === 'monster') return turn === myPlayerNumber && chain.length === 0 && !summonedThisTurn && pMonsters.length < 3;
-      if (card.type === 'spell') return pSpells.length < 3;
-      return (card.type === 'trap' || card.type === 'field') && chain.length === 0 && pSpells.length < 3;
-    }
-    return false;
-  }, [winner, selectedAction, phase, pMonsters.length, priorityPlayer, myPlayerNumber, turn, chain.length, summonedThisTurn, pSpells.length]);
-
-  const handleEndTurn = useCallback(() => {
-    const nextTurn = turn === 0 ? 1 : 0;
-    setTurn(nextTurn); setTotalTurns(t => t + 1); setPriorityPlayer(nextTurn);
-    setSummonedThisTurn(false); setConsecutivePasses(0);
-    showNotification("NEXT TURN");
-    if (myPlayerNumber === turn) emit('END_TURN_SYNC', { nextTurn, totalTurns: totalTurns + 1 });
-  }, [turn, myPlayerNumber, emit, showNotification, totalTurns]);
+  // 소켓 리스너
+  useEffect(() => {
+    socket.on('connect', () => setIsConnected(true));
+    socket.on('disconnect', () => setIsConnected(false));
+    socket.on('ROOM_CREATED', ({ roomCode, playerNumber }) => { setRoomCode(roomCode); setMyPlayerNumber(playerNumber); setView('LOBBY'); });
+    socket.on('ROOM_JOINED', ({ roomCode, playerNumber }) => { setRoomCode(roomCode); setMyPlayerNumber(playerNumber); setView('LOBBY'); });
+    socket.on('PLAYER_UPDATE', ({ count }) => setPlayerCount(count));
+    socket.on('SYSTEM_MESSAGE', (msg) => showNotification(msg));
+    socket.on('OPPONENT_READY', () => setIsOReady(true));
+    socket.on('OPPONENT_LEFT_EVENT', () => { setWinner('PLAYER'); showNotification("상대방이 떠났습니다."); });
+    socket.on('GAME_START_SIGNAL', ({ decks: allDecks, firstTurn, playerIds }) => {
+      const myId = socket.id; const opId = playerIds.find(id => id !== myId);
+      const myD = allDecks[myId]; const opD = allDecks[opId];
+      setPDeck(myD.slice(6)); setODeck(opD.slice(6));
+      setPHand(myD.slice(0, 6)); setOHand(opD.slice(0, 6));
+      setPhase('SETUP'); setView('GAME'); setTurn(firstTurn); setPriorityPlayer(firstTurn);
+    });
+    socket.on('OPPONENT_ACTION', ({ actionType, data }) => {
+        switch (actionType) {
+            case 'SETUP_MONSTER': setOMonsters(p => [...p, {...data.card, isFacedown: true}]); setOHand(p => p.slice(0, -1)); break;
+            case 'READY_SIGNAL': setIsOReady(true); break;
+            case 'START_DUEL_SYNC': setPMonsters(data.pMonsters); setOMonsters(data.oMonsters); setPhase('MAIN'); setTotalTurns(1); showNotification("DUEL START!"); break;
+            case 'PASS': handlePass(); break;
+            case 'PLAY_MONSTER': setOMonsters(p => [...p, data.card]); setOHand(p => p.slice(0, -1)); break;
+            default: break;
+        }
+    });
+    return () => { socket.off('ROOM_CREATED'); socket.off('ROOM_JOINED'); socket.off('GAME_START_SIGNAL'); socket.off('PLAYER_UPDATE'); socket.off('SYSTEM_MESSAGE'); };
+  }, [myPlayerNumber, roomCode, showNotification]);
 
   const handlePass = useCallback(() => {
     if (chain.length === 0 && turn === myPlayerNumber && priorityPlayer === myPlayerNumber) {
-      handleEndTurn(); return;
+      const nextTurn = turn === 0 ? 1 : 0;
+      setTurn(nextTurn); setTotalTurns(t => t + 1); setPriorityPlayer(nextTurn);
+      showNotification("NEXT TURN"); if (myPlayerNumber === turn) emit('PASS', {}); return;
     }
-    setPriorityPlayer(priorityPlayer === 0 ? 1 : 0);
-    if (priorityPlayer === myPlayerNumber) emit('PASS', {});
-  }, [chain.length, turn, myPlayerNumber, priorityPlayer, handleEndTurn, emit]);
+    setPriorityPlayer(priorityPlayer === 0 ? 1 : 0); if (priorityPlayer === myPlayerNumber) emit('PASS', {});
+  }, [chain, turn, myPlayerNumber, priorityPlayer, emit, showNotification]);
 
   const resolveChain = useCallback(() => {
     showNotification("RESOLVING...");
@@ -213,50 +143,14 @@ export default function App() {
     setTimeout(() => { setPMonsters(newPM); setOMonsters(newOM); setPSpells(newPS); setOSpells(newOS); setChain([]); setPriorityPlayer(turn); }, 800);
   }, [chain, pMonsters, oMonsters, pSpells, oSpells, activeField, turn, showNotification]);
 
-  // 소켓 연동
-  useEffect(() => {
-    socket.on('connect', () => setIsConnected(true));
-    socket.on('disconnect', () => setIsConnected(false));
-    socket.on('ROOM_CREATED', ({ roomCode, playerNumber }) => { setRoomCode(roomCode); setMyPlayerNumber(playerNumber); setView('LOBBY'); });
-    socket.on('ROOM_JOINED', ({ roomCode, playerNumber }) => { setRoomCode(roomCode); setMyPlayerNumber(playerNumber); setView('LOBBY'); });
-    socket.on('MATCH_FOUND', () => showNotification("상대방 입장!"));
-    socket.on('OPPONENT_READY', () => setIsOReady(true));
-    socket.on('GAME_START_SIGNAL', ({ decks: allDecks, firstTurn, playerIds }) => {
-      const myId = socket.id; const opId = playerIds.find(id => id !== myId);
-      const myD = allDecks[myId]; const opD = allDecks[opId];
-      setPDeck(myD.slice(6)); setODeck(opD.slice(6));
-      setPHand(myD.slice(0, 6)); setOHand(opD.slice(0, 6));
-      setPhase('SETUP'); setView('GAME'); setTurn(firstTurn); setPriorityPlayer(firstTurn);
-    });
-    socket.on('OPPONENT_ACTION', ({ actionType, data }) => {
-        switch (actionType) {
-            case 'SETUP_MONSTER': setOMonsters(p => [...p, {...data.card, isFacedown: true}]); setOHand(p => p.slice(0, -1)); break;
-            case 'READY_SIGNAL': setIsOReady(true); break;
-            case 'START_DUEL_SYNC': setPMonsters(data.pMonsters); setOMonsters(data.oMonsters); setPhase('MAIN'); setTotalTurns(1); showNotification("DUEL START!"); break;
-            case 'PASS': handlePass(); break;
-            case 'END_TURN_SYNC': setTurn(data.nextTurn); setTotalTurns(data.totalTurns); setPriorityPlayer(data.nextTurn); break;
-            case 'PLAY_MONSTER': setOMonsters(p => [...p, data.card]); setOHand(p => p.slice(0, -1)); break;
-            default: break;
-        }
-    });
-    return () => { socket.off('ROOM_CREATED'); socket.off('ROOM_JOINED'); socket.off('GAME_START_SIGNAL'); socket.off('OPPONENT_ACTION'); };
-  }, [myPlayerNumber, roomCode, showNotification, handlePass]);
-
-  useEffect(() => {
-    if (winner || phase === 'SETUP' || phase === 'START' || view !== 'GAME') return;
-    if (consecutivePasses >= 2 && chain.length > 0) resolveChain();
-  }, [consecutivePasses, chain, view, phase, resolveChain, winner]);
-
-  useEffect(() => { localStorage.setItem('nabla_decks', JSON.stringify(decks)); }, [decks]);
-
   const handleHandClick = (card, idx, isPlayer) => {
-    if (!isCardPlayable(card, isPlayer)) return;
-    if (phase === 'SETUP') {
+    if (phase === 'SETUP' && isPlayer) {
+      if (card.type !== 'monster' || pMonsters.length >= 3) return;
       const newM = { ...card, instanceId: Math.random(), isFacedown: true };
       setPMonsters([...pMonsters, newM]); setPHand(pHand.filter((_, i) => i !== idx));
       socket.emit('GAME_ACTION', { roomCode, actionType: 'SETUP_MONSTER', data: { card: newM } }); return;
     }
-    if (card.type === 'monster') {
+    if (card.type === 'monster' && isPlayer && turn === myPlayerNumber) {
       const newM = { ...card, instanceId: Math.random(), isFacedown: false };
       setPMonsters([...pMonsters, newM]); setPHand(pHand.filter((_, i) => i !== idx));
       setSummonedThisTurn(true); socket.emit('GAME_ACTION', { roomCode, actionType: 'PLAY_MONSTER', data: { card: newM } });
@@ -265,71 +159,54 @@ export default function App() {
 
   const handleReady = () => {
     if (pMonsters.length < 1) return alert("몬스터를 세트하세요.");
-    setIsPReady(true); socket.emit('GAME_ACTION', { roomCode, actionType: 'READY_SIGNAL', data: {} });
+    setIsPReady(true); socket.emit('READY_TO_START', { roomCode, deck: shuffleDeck(decks.find(d => d.id === selectedDeckId).cards) });
   };
 
-  useEffect(() => {
-    if (phase === 'SETUP' && isPReady && isOReady && myPlayerNumber === 0) {
-       const flippedPM = pMonsters.map(m => ({ ...m, isFacedown: false }));
-       const flippedOM = oMonsters.map(m => ({ ...m, isFacedown: false }));
-       socket.emit('GAME_ACTION', { roomCode, actionType: 'START_DUEL_SYNC', data: { oMonsters: flippedPM, pMonsters: flippedOM } });
-       setPMonsters(flippedPM); setOMonsters(flippedOM); setPhase('MAIN'); showNotification("DUEL START!");
-    }
-  }, [isPReady, isOReady, myPlayerNumber, pMonsters, oMonsters, roomCode, showNotification, phase]);
-
-  const cancelTargeting = useCallback((e) => {
-    if (e) e.preventDefault();
-    if (selectedAction) { setSelectedAction(null); showNotification("TARGET CANCELLED"); }
-  }, [selectedAction, showNotification]);
-
   // --- 화면 분기 ---
-  if (view === 'MENU') return <Menu setView={setView} isConnected={isConnected} showJoinInput={showJoinInput} setShowJoinInput={setShowJoinInput} inputCode={inputCode} setInputCode={setInputCode} onJoin={() => socket.emit('JOIN_ROOM', inputCode)} />;
+  if (view === 'MENU') return (
+    <div className="menu-screen">
+      <h1 className="game-title">NABLA MASTERS</h1>
+      <div className="menu-main vertical">
+        <button className="menu-btn large" onClick={() => setView('DUEL_MENU')}>DUEL</button>
+        <button className="menu-btn large" onClick={() => setView('DECK_LIST')}>DECK</button>
+      </div>
+      <div className={`connection-status ${isConnected ? 'on' : 'off'}`}>Server: {isConnected ? "CONNECTED" : "DISCONNECTED"}</div>
+    </div>
+  );
 
   if (view === 'DECK_LIST') return (
     <div className="menu-screen deck-list-view">
       <h1 className="game-title small">MY DECKS</h1>
       <div className="deck-grid">
-        {decks.map(d => (
-          <div key={d.id} className="deck-slot" onClick={() => { setEditingDeck(d); setView('DECK_EDITOR'); }}>
-            <div className="deck-slot-name">{d.name}</div>
-            <div className="deck-slot-count">{d.cards.length} Cards</div>
-          </div>
-        ))}
+        {decks.map(d => (<div key={d.id} className="deck-slot" onClick={() => { setEditingDeck(d); setView('DECK_EDITOR'); }}>{d.name} ({d.cards.length})</div>))}
         <div className="deck-slot add-new" onClick={() => setDecks([...decks, {id: Date.now().toString(), name: 'New Deck', cards: []}])}><span>+ NEW DECK</span></div>
       </div>
       <button className="menu-btn" onClick={() => setView('MENU')}>BACK</button>
     </div>
   );
 
-  if (view === 'DECK_EDITOR') return <DeckEditor deck={editingDeck} onBack={() => setView('DECK_LIST')} onSave={(c) => { setDecks(decks.map(d => d.id === editingDeck.id ? {...d, cards: c} : d)); setView('DECK_LIST'); }} />;
-
-  if (view === 'DUEL_MENU') return (
-    <div className="menu-screen">
-      <h1 className="game-title small">DUEL MODE</h1>
-      <div className="menu-main vertical">
-        <button className="menu-btn large" onClick={() => { setShowJoinInput(false); setView('ROOM_LOBBY'); }}>MULTI PLAY</button>
-        <button className="menu-btn large" onClick={() => setView('MENU')}>BACK</button>
+  if (view === 'DECK_EDITOR') return (
+    <div className="deck-editor" onContextMenu={(e)=>e.preventDefault()}>
+      <div className="editor-header">
+        <h2>{editingDeck.name} ({editingDeck.cards.length}/60)</h2>
+        <div className="header-btns"><button className="menu-btn primary" onClick={() => { setDecks(decks.map(d => d.id === editingDeck.id ? editingDeck : d)); setView('DECK_LIST'); }}>SAVE</button><button className="menu-btn" onClick={() => setView('DECK_LIST')}>BACK</button></div>
+      </div>
+      <div className="editor-body">
+        <div className="deck-view"><h3>MY DECK</h3><div className="editor-grid">{editingDeck.cards.map((c, i) => (<div key={c.instanceId || i} onContextMenu={(e) => { e.preventDefault(); setEditingDeck({...editingDeck, cards: editingDeck.cards.filter(card => card.instanceId !== c.instanceId)}); }}><CardUI card={c} isPlayerSide={true} /></div>))}</div></div>
+        <div className="library-view"><h3>LIBRARY</h3><div className="editor-grid">{ALL_CARDS_LIB.map((c, i) => (<div key={c.id || i} onContextMenu={(e) => { e.preventDefault(); if (editingDeck.cards.length >= 60) return; const count = editingDeck.cards.filter(card => card.id === c.id).length; if (count >= 4) return alert("4장 제한"); setEditingDeck({...editingDeck, cards: sortCards([...editingDeck.cards, {...c, instanceId: Math.random()}])}); }}><CardUI card={c} isPlayerSide={true} /></div>))}</div></div>
       </div>
     </div>
   );
 
+  if (view === 'DUEL_MENU') return (
+    <div className="menu-screen"><h1 className="game-title small">DUEL MODE</h1><div className="menu-main vertical"><button className="menu-btn large" onClick={() => setView('ROOM_LOBBY')}>MULTI PLAY</button><button className="menu-btn large" onClick={() => setView('MENU')}>BACK</button></div></div>
+  );
+
   if (view === 'ROOM_LOBBY') return (
     <div className="menu-screen">
-      <h1 className="game-title small">MULTI PLAY</h1>
       <div className="menu-main vertical">
-        {!showJoinInput ? (
-          <><button className="menu-btn large" onClick={() => socket.emit('CREATE_ROOM')}>CREATE ROOM</button>
-          <button className="menu-btn large" onClick={() => setShowJoinInput(true)}>JOIN ROOM</button>
-          <button className="menu-btn large" onClick={() => setView('DUEL_MENU')}>BACK</button></>
-        ) : (
-          <div className="join-input-container">
-            <input className="room-code-input" type="text" placeholder="CODE" value={inputCode} onChange={(e)=>setInputCode(e.target.value.toUpperCase())} />
-            <div className="join-btns">
-              <button className="menu-btn primary" onClick={() => socket.emit('JOIN_ROOM', inputCode)}>JOIN</button>
-              <button className="menu-btn" onClick={() => setShowJoinInput(false)}>CANCEL</button>
-            </div>
-          </div>
-        )}
+        {!showJoinInput ? (<><button className="menu-btn large" onClick={() => socket.emit('CREATE_ROOM')}>CREATE ROOM</button><button className="menu-btn large" onClick={() => setShowJoinInput(true)}>JOIN ROOM</button><button className="menu-btn large" onClick={() => setView('DUEL_MENU')}>BACK</button></>) : 
+        (<div className="join-input-container"><input className="room-code-input" type="text" placeholder="CODE" value={inputCode} onChange={(e)=>setInputCode(e.target.value.toUpperCase())} /><div className="join-btns"><button className="menu-btn primary" onClick={() => socket.emit('JOIN_ROOM', inputCode)}>JOIN</button><button className="menu-btn" onClick={() => setShowJoinInput(false)}>CANCEL</button></div></div>)}
       </div>
     </div>
   );
@@ -337,23 +214,28 @@ export default function App() {
   if (view === 'LOBBY') return (
     <div className="menu-screen lobby">
       <div className="room-info-header"><p>ROOM CODE</p><h2 className="code-display">{roomCode}</h2></div>
+      
+      {/* 인원 상태 표시 UI */}
+      <div className="player-slots">
+        <div className="p-slot active">PLAYER 1 (YOU)</div>
+        <div className={`p-slot ${playerCount >= 2 ? 'active' : 'waiting'}`}>
+          {playerCount >= 2 ? "PLAYER 2 (READY)" : "WAITING FOR OPPONENT..."}
+        </div>
+      </div>
+
       <h2>SELECT DECK</h2>
       <div className="deck-selector">
         {decks.map(d => (<div key={d.id} className={`deck-item ${selectedDeckId === d.id ? 'selected' : ''}`} onClick={() => setSelectedDeckId(d.id)}>{d.name} ({d.cards.length})</div>))}
       </div>
       <div className="lobby-btns">
-        <button className={`menu-btn large ${isPReady ? 'ready' : ''}`} onClick={() => {
-          const d = decks.find(d => d.id === selectedDeckId); if (!d || d.cards.length < 40) return alert("덱 40장 필수");
-          setIsPReady(true); socket.emit('READY_TO_START', { roomCode, deck: shuffleDeck(d.cards) });
-        }}>{isPReady ? 'READY √' : 'READY TO DUEL'}</button>
-        <button className="menu-btn large" onClick={() => window.location.reload()}>EXIT TO MENU</button>
+        <button className={`menu-btn large ${isPReady ? 'ready' : ''}`} onClick={handleReady}>{isPReady ? 'READY √' : 'READY TO DUEL'}</button>
+        <button className="menu-btn large" onClick={() => { socket.emit('LEAVE_ROOM_REQUEST', roomCode); window.location.reload(); }}>EXIT TO MENU</button>
       </div>
-      {isOReady && <p className="status-msg">상대방 준비 완료!</p>}
     </div>
   );
 
   return (
-    <div className="game-container" onContextMenu={cancelTargeting}>
+    <div className="game-container">
       {notification && <div className="phase-notification">{notification}</div>}
       <div className="hand-container top">{oHand.map((c, i) => <div key={`oh-${i}`} className="card back small" />)}</div>
       <div className="main-arena">
@@ -364,8 +246,7 @@ export default function App() {
             <div className="field-anchor"><div className="slot field-slot">{activeField ? <CardUI card={activeField} /> : 'FIELD'}</div></div>
             <div className={`turn-priority-tab ${turn === myPlayerNumber ? "player-turn" : "opponent-turn"}`}>
               <div className="turn-info">TURN {totalTurns}</div>
-              {phase === 'SETUP' ? <button className={`setup-btn ${isPReady ? "ready-active" : ""}`} onClick={handleReady}>{isPReady ? "READY √" : "READY"}</button> : 
-              <button className="pass-btn" onClick={handlePass} disabled={priorityPlayer !== myPlayerNumber}>PASS</button>}
+              <button className="pass-btn" onClick={handlePass} disabled={priorityPlayer !== myPlayerNumber}>PASS</button>
             </div>
           </div>
           <div className="zone monster-zone player-side">{[0,1,2].map(i => (<div key={`pm-${i}`} className="slot">{pMonsters[i] && renderCard(pMonsters[i], true, pMonsters[i].isFacedown, null)}</div>))}</div>

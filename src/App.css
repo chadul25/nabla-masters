@@ -66,3 +66,39 @@ body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', 
 .room-code-input { background: #000; border: 2px solid var(--gold); border-radius: 5px; color: white; padding: 15px; font-size: 1.5rem; text-align: center; font-weight: 900; letter-spacing: 5px; }
 .join-btns { display: flex; gap: 10px; width: 100%; }
 .join-btns .menu-btn { flex: 1; }
+
+/* --- 로비 인원 슬롯 UI --- */
+.player-slots {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.p-slot {
+  width: 200px;
+  padding: 15px;
+  border-radius: 10px;
+  font-weight: 900;
+  font-size: 0.9rem;
+  text-align: center;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.p-slot.active {
+  background: rgba(41, 128, 185, 0.3);
+  border-color: #2980b9;
+  color: white;
+  box-shadow: 0 0 15px rgba(41, 128, 185, 0.4);
+}
+
+.p-slot.waiting {
+  background: rgba(0, 0, 0, 0.5);
+  color: #555;
+  border-style: dashed;
+  animation: pulse-border 2s infinite;
+}
+
+@keyframes pulse-border {
+  50% { border-color: #444; opacity: 0.6; }
+}
