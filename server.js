@@ -1,4 +1,3 @@
-// server.js
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
@@ -19,7 +18,6 @@ io.on('connection', (socket) => {
     rooms[roomCode] = { players: [socket.id], readyStatus: {} };
     socket.join(roomCode);
     socket.emit('ROOM_CREATED', { roomCode, playerNumber: 0 });
-    console.log('Room Created:', roomCode);
   });
 
   socket.on('JOIN_ROOM', (roomCode) => {
@@ -30,7 +28,7 @@ io.on('connection', (socket) => {
       socket.emit('ROOM_JOINED', { roomCode, playerNumber: 1 });
       io.to(roomCode).emit('MATCH_FOUND');
     } else {
-      socket.emit('ERROR', '방이 가득 찼거나 존재하지 않습니다.');
+      socket.emit('ERROR', '방이 존재하지 않거나 가득 찼습니다.');
     }
   });
 
@@ -65,4 +63,4 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(3001, () => console.log('Nabla Server v4.4 running on 3001'));
+server.listen(3001, () => console.log('Nabla Server running on 3001'));
