@@ -1,104 +1,215 @@
+/* =============================================================================
+   [SECTION 1] 전역 변수 및 초기화 (Root & Reset)
+   ============================================================================= */
 :root {
-  --monster: #d35400; --spell: #2980b9; --trap: #8e44ad; --field: #27ae60;
-  --bg: #090a0c; --gold: #f1c40f;
-  --card-h: 13.5vh; --card-w: calc(var(--card-h) * 0.72);
+  /* 색상 팔레트 */
+  --monster: #d35400;
+  --spell: #2980b9;
+  --trap: #8e44ad;
+  --field: #27ae60;
+  --bg: #090a0c;
+  --gold: #f1c40f;
+  --text-dim: #aaa;
+  
+  /* 카드 크기 (화면 높이 기반 비율 계산) */
+  --card-h: 13.5vh; 
+  --card-w: calc(var(--card-h) * 0.72);
+  
+  /* 보드 레이아웃 간격 */
+  --board-gap-v: 4px;
+  --board-gap-h: 10px;
 }
 
-body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: white;
+  font-family: 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden; /* 전체 화면 고정 */
+}
 
-/* --- 레이아웃 공통 --- */
-.game-container, .menu-screen { height: 100vh; width: 100vw; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; background: radial-gradient(circle at center, #1b222c 0%, #050608 100%); }
-.menu-main.vertical { display: flex; flex-direction: column; gap: 15px; width: 350px; }
+/* =============================================================================
+   [SECTION 2] 공통 레이아웃 엔진 (Layout Base)
+   ============================================================================= */
+.game-container, .menu-screen {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* 수직 정중앙 정렬 (위로 쏠림 방지) */
+  position: relative;
+  background: radial-gradient(circle at center, #1b222c 0%, #050608 100%);
+  box-sizing: border-box;
+}
 
-/* --- [복구] 서버 연결 표시기 --- */
-.connection-status { position: fixed; bottom: 20px; right: 20px; padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 900; border: 1px solid rgba(255, 255, 255, 0.2); z-index: 1000; }
-.connection-status.on { background: #27ae60; color: white; box-shadow: 0 0 10px #27ae60; }
-.connection-status.off { background: #c0392b; color: white; animation: blink 1s infinite; }
-@keyframes blink { 50% { opacity: 0.5; } }
+/* 버튼 기본 스타일 (검정 바탕 + 노란 테두리 + 흰색 두꺼운 글씨) */
+.menu-btn {
+  padding: 12px 24px;
+  background-color: #000;
+  color: #fff;
+  border: 2px solid var(--gold);
+  border-radius: 6px;
+  font-weight: 900;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  text-align: center;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
 
-/* --- [복구] 덱 편집기 UI 고정 --- */
-.deck-editor { display: flex; flex-direction: column; height: 100vh; background: #050608; padding: 15px; width: 100vw; box-sizing: border-box; }
-.editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
-.editor-body { display: flex; flex: 1; gap: 20px; overflow: hidden; height: 0; /* 자식 flex-grow를 위해 필요 */ }
-.deck-view, .library-view { flex: 1; display: flex; flex-direction: column; background: rgba(255, 255, 255, 0.03); border-radius: 15px; padding: 20px; box-sizing: border-box; }
-.editor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); gap: 15px; overflow-y: auto; flex: 1; align-content: flex-start; }
-.editor-card-wrapper { display: flex; justify-content: center; height: 160px; transform: scale(0.85); transform-origin: top center; margin-bottom: -15px; }
-.section-title { font-size: 1.2rem; margin-bottom: 15px; border-left: 5px solid var(--gold); padding-left: 10px; color: var(--gold); }
-
-/* --- 버튼 디자인 --- */
-.menu-btn { padding: 12px 24px; background-color: #000; color: #fff; border: 2px solid var(--gold); border-radius: 5px; font-weight: 900; cursor: pointer; transition: 0.2s; text-transform: uppercase; text-align: center; }
-.menu-btn:hover { background-color: var(--gold); color: #000; }
+.menu-btn:hover { background-color: var(--gold); color: #000; transform: translateY(-2px); }
+.menu-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
 .menu-btn.primary { background-color: var(--gold); color: #000; }
 .menu-btn.large { padding: 25px; font-size: 1.5rem; width: 100%; letter-spacing: 2px; }
+.menu-btn.ready { background: var(--field); border-color: #2ecc71; }
 
-/* --- 덱 리스트 및 선택기 --- */
-.deck-list-view { padding-top: 50px !important; justify-content: flex-start !important; }
-.deck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; width: 85%; max-width: 1000px; margin: 40px auto; padding: 20px; overflow-y: auto; }
-.deck-slot { height: 140px; background: #1a1a1a; border: 2px solid #333; border-radius: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; }
-.deck-slot:hover { border-color: var(--gold); background: #222; transform: translateY(-5px); }
-.deck-selector { display: flex; flex-direction: column; gap: 10px; width: 350px; max-height: 40vh; overflow-y: auto; margin: 20px 0; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 10px; }
-.deck-item { padding: 15px; background: #000; border: 2px solid #333; border-radius: 8px; cursor: pointer; text-align: center; color: #aaa; transition: 0.2s; }
+/* =============================================================================
+   [SECTION 3] 메뉴 및 로비 뷰 (Menu & Lobby Views)
+   ============================================================================= */
+.game-title { font-size: 5rem; color: var(--gold); text-shadow: 0 0 20px rgba(241, 196, 15, 0.5); font-weight: 900; margin: 0; }
+.game-title.small { font-size: 3rem; margin-bottom: 20px; }
+.menu-main.vertical { display: flex; flex-direction: column; gap: 15px; width: 350px; }
+
+/* 서버 연결 인디케이터 */
+.connection-status {
+  position: fixed; bottom: 20px; right: 20px; padding: 8px 16px; border-radius: 20px;
+  font-size: 0.75rem; font-weight: 900; border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.connection-status.on { background: #27ae60; box-shadow: 0 0 10px #27ae60; }
+.connection-status.off { background: #c0392b; animation: pulse-red 1s infinite; }
+
+/* 로비 덱 선택기 */
+.deck-selector {
+  display: flex; flex-direction: column; gap: 10px; width: 350px; 
+  max-height: 40vh; overflow-y: auto; margin: 20px 0; padding: 10px;
+  background: rgba(255, 255, 255, 0.05); border-radius: 10px;
+}
+.deck-item {
+  padding: 15px; background: #000; border: 2px solid #333; border-radius: 8px;
+  cursor: pointer; text-align: center; transition: 0.2s;
+}
 .deck-item.selected { border-color: var(--gold); background: #1a1a1a; color: var(--gold); box-shadow: 0 0 15px rgba(241, 196, 15, 0.3); }
 
-/* --- 인게임 카드 디자인 및 상태 --- */
-.card { width: var(--card-w); height: var(--card-h); border-radius: 8px; padding: 5px; display: flex; flex-direction: column; justify-content: space-between; background: #1a1a1a; border: 1px solid #444; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); overflow: hidden; }
+/* 로비 인원 현황 */
+.player-slots { display: flex; gap: 20px; margin-bottom: 20px; }
+.p-slot { width: 180px; padding: 12px; border-radius: 8px; background: #111; border: 1px solid #333; text-align: center; font-weight: 900; font-size: 0.8rem; }
+.p-slot.active { border-color: var(--spell); background: rgba(41, 128, 185, 0.2); }
+
+/* =============================================================================
+   [SECTION 4] 덱 리스트 및 편집기 (Deck Builder)
+   ============================================================================= */
+.deck-list-view { padding-top: 50px !important; justify-content: flex-start !important; }
+.deck-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
+  gap: 25px; width: 85%; max-width: 1100px; margin: 30px auto; padding: 20px; overflow-y: auto;
+}
+.deck-slot {
+  height: 140px; background: #1a1a1a; border: 2px solid #333; border-radius: 15px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
+}
+.deck-slot:hover { border-color: var(--gold); transform: translateY(-5px); }
+
+/* 편집기 메인 레이아웃 */
+.deck-editor { display: flex; flex-direction: column; height: 100vh; width: 100vw; background: #050608; padding: 15px; box-sizing: border-box; }
+.editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+.editor-body { display: flex; flex: 1; gap: 20px; overflow: hidden; }
+.deck-view, .library-view { flex: 1; display: flex; flex-direction: column; background: rgba(255, 255, 255, 0.03); border-radius: 15px; padding: 15px; overflow: hidden; }
+.editor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; overflow-y: auto; }
+.editor-card-wrapper { transform: scale(0.85); height: 160px; display: flex; justify-content: center; transform-origin: top center; margin-bottom: -15px; }
+
+/* =============================================================================
+   [SECTION 5] 인게임 보드 (Duel Board)
+   ============================================================================= */
+.main-arena {
+  flex: 1; width: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; min-height: 0;
+}
+
+.duel-board {
+  display: flex; flex-direction: column;
+  gap: var(--board-gap-v); position: relative;
+}
+
+.zone { display: flex; gap: var(--board-gap-h); justify-content: center; }
+
+/* 중앙선 및 0열 요소 */
+.center-divider {
+  width: 100%; height: 6vh; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.field-anchor { position: absolute; left: calc(-1 * (var(--card-w) + 20px)); }
+.turn-priority-tab { 
+  position: absolute; right: calc(-1 * (var(--card-w) + 20px)); 
+  width: var(--card-w); background: #000; border: 2px solid var(--gold);
+  border-radius: 8px; padding: 5px; box-sizing: border-box;
+}
+
+.turn-info { font-size: 0.8rem; font-weight: 900; text-align: center; border-bottom: 1px solid #333; padding-bottom: 3px; margin-bottom: 5px; }
+.player-turn { background: rgba(41, 128, 185, 0.9) !important; }
+.opponent-turn { background: rgba(192, 57, 43, 0.9) !important; }
+
+/* 패 영역 */
+.hand-container {
+  height: 15vh; width: 100%;
+  display: flex !important; flex-direction: row !important;
+  justify-content: center; align-items: center; gap: 8px;
+  background: rgba(0, 0, 0, 0.3); z-index: 100;
+}
+
+.deck-info {
+  position: absolute; background: rgba(0,0,0,0.8); border: 1px solid var(--gold);
+  padding: 4px 10px; border-radius: 4px; font-size: 0.7rem; font-weight: 900; color: var(--gold);
+}
+.opponent-deck { top: 50%; right: 10%; transform: translateY(-50%); }
+.player-deck { top: 50%; left: 10%; transform: translateY(-50%); }
+
+/* =============================================================================
+   [SECTION 6] 카드 디자인 및 효과 (Card Components)
+   ============================================================================= */
+.card {
+  width: var(--card-w); height: var(--card-h);
+  border-radius: 8px; padding: 5px; box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: space-between;
+  background: #1a1a1a; border: 1px solid #444;
+  cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  overflow: hidden; position: relative;
+}
+
+/* 카드 타입별 색상 강제 지정 */
 .card.monster { background-color: var(--monster) !important; border-color: #e67e22 !important; }
 .card.spell { background-color: var(--spell) !important; border-color: #3498db !important; }
 .card.trap { background-color: var(--trap) !important; border-color: #9b59b6 !important; }
 .card.field { background-color: var(--field) !important; border-color: #2ecc71 !important; }
-.card-name { font-size: 0.65rem; font-weight: bold; background: rgba(0,0,0,0.5); padding: 2px; border-radius: 3px; text-align: center; color: #fff; }
+
+.card-name { font-size: 0.65rem; font-weight: 900; background: rgba(0,0,0,0.5); padding: 2px; border-radius: 3px; text-align: center; color: #fff; }
 .card-formula { background: white; color: black; border-radius: 4px; flex: 1; margin: 4px 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .card-type-label { font-size: 0.5rem; text-align: center; opacity: 0.7; color: #fff; font-weight: bold; }
+
+/* 상태 효과 */
 .playable { border: 2px solid var(--gold) !important; box-shadow: 0 0 15px var(--gold) !important; }
+.facedown { border: 2px dashed var(--trap) !important; background: #1a1a1a !important; }
 .back { background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d) !important; border-color: #2c3e50 !important; }
-.facedown { border: 2px dashed var(--trap); }
+.doomed { border: 3px solid #ff4757 !important; animation: pulse-red 1s infinite; }
 
-/* --- 인게임 레이아웃 --- */
-.duel-board { display: flex; flex-direction: column; gap: 4px; position: relative; }
-.zone { display: flex; gap: 10px; justify-content: center; }
-.slot { width: var(--card-w); height: var(--card-h); border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; display: flex; justify-content: center; align-items: center; }
-.center-divider { width: 100%; height: 5vh; position: relative; display: flex; align-items: center; justify-content: center; }
-.field-anchor { position: absolute; left: calc(-1 * (var(--card-w) + 20px)); }
-.turn-priority-tab { position: absolute; right: calc(-1 * (var(--card-w) + 20px)); width: var(--card-w); background: #1a1a1a; border: 2px solid #444; border-radius: 8px; padding: 5px; }
-
-/* --- JOIN 화면 --- */
-.join-input-container { display: flex; flex-direction: column; gap: 15px; width: 350px; align-items: stretch; margin: 0 auto; }
-.room-code-input { background: #000; border: 2px solid var(--gold); border-radius: 5px; color: white; padding: 15px; font-size: 1.5rem; text-align: center; font-weight: 900; letter-spacing: 5px; }
-.join-btns { display: flex; gap: 10px; width: 100%; }
-.join-btns .menu-btn { flex: 1; }
-
-/* --- 로비 인원 슬롯 UI --- */
-.player-slots {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 30px;
+/* =============================================================================
+   [SECTION 7] 알림 및 애니메이션 (FX & Animations)
+   ============================================================================= */
+.phase-notification {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 5rem; font-weight: 900; color: white;
+  text-shadow: 0 0 20px black; z-index: 1000;
+  pointer-events: none; animation: fadeInOut 1.5s forwards;
 }
 
-.p-slot {
-  width: 200px;
-  padding: 15px;
-  border-radius: 10px;
-  font-weight: 900;
-  font-size: 0.9rem;
-  text-align: center;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.3s ease;
-}
+@keyframes fadeInOut { 0% { opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes pulse-red { 0% { box-shadow: 0 0 5px #ff4757; } 50% { box-shadow: 0 0 20px #ff4757; } 100% { box-shadow: 0 0 5px #ff4757; } }
 
-.p-slot.active {
-  background: rgba(41, 128, 185, 0.3);
-  border-color: #2980b9;
-  color: white;
-  box-shadow: 0 0 15px rgba(41, 128, 185, 0.4);
-}
-
-.p-slot.waiting {
-  background: rgba(0, 0, 0, 0.5);
-  color: #555;
-  border-style: dashed;
-  animation: pulse-border 2s infinite;
-}
-
-@keyframes pulse-border {
-  50% { border-color: #444; opacity: 0.6; }
-}
+/* 기타 UI */
+.victory-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+.modal { text-align: center; border: 5px solid var(--gold); padding: 50px; border-radius: 30px; background: #000; box-shadow: 0 0 50px var(--gold); }
+.menu-exit-btn { position: fixed; top: 20px; right: 20px; font-size: 0.7rem; opacity: 0.5; }
+.menu-exit-btn:hover { opacity: 1; }
