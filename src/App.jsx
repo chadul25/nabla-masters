@@ -8,18 +8,24 @@ import './App.css';
 import { MONSTERS, SPELLS, TRAPS, FIELDS } from './cards';
 import { Engine } from './engine';
 
-// --- [SECTION 1] 서버 및 라이브러리 설정 ---
+// =============================================================================
+// [SECTION 1] 서버 연결 및 설정
+// =============================================================================
 const isLocal = window.location.hostname === 'localhost';
 const SERVER_URL = isLocal ? 'http://localhost:3001' : 'https://renate-nonmultiplicative-edgardo.ngrok-free.dev';
 const socket = io(SERVER_URL, { transports: ['websocket'] });
 const CARD_LIBRARY = [...MONSTERS, ...SPELLS, ...TRAPS, ...FIELDS];
 
-// --- [SECTION 2] 서브 UI 컴포넌트 ---
+// =============================================================================
+// [SECTION 2] 서브 UI 컴포넌트 (App 이전에 정의하여 ReferenceError 방지)
+// =============================================================================
 
-function CardUI({ card, isFacedown, isPlayerSide, isPlayable, isHover, isDoomed, onClick, onContextMenu, className }) {
+// [UI] 카드 한 장 렌더링
+function UI_Card({ card, isFacedown, isPlayerSide, isPlayable, isHover, isDoomed, onClick, onContextMenu, className }) {
   if (!card) return null;
   const isMonster = card.type === 'monster';
   const mathContent = isMonster ? Engine.formatToTex(card.formula) : card.display;
+
   return (
     <div 
       className={`card ${card.type} ${isFacedown ? 'back' : (isPlayerSide && card.isSet ? 'facedown peekable' : '')} ${isPlayable ? 'playable' : ''} ${isDoomed ? 'doomed' : ''} ${isHover ? 'projection-hover' : ''} ${className || ''}`}
@@ -34,6 +40,7 @@ function CardUI({ card, isFacedown, isPlayerSide, isPlayable, isHover, isDoomed,
   );
 }
 
+// [UI] 메인 메뉴 화면
 function UI_Menu({ setCurrentView, isConnected, showJoinInput, setShowJoinInput, inputCode, setInputCode, onJoin }) {
   return (
     <div className="menu-screen">
@@ -59,11 +66,14 @@ function UI_Menu({ setCurrentView, isConnected, showJoinInput, setShowJoinInput,
   );
 }
 
+// [UI] 덱 편집기 화면
 function UI_DeckEditor({ deck, onSave, onBack }) {
   const [currentCards, setCurrentCards] = useState(deck.cards || []);
   const handleAdd = (e, card) => {
     e.preventDefault();
-    if (currentCards.length >= 60 || currentCards.filter(x => x.id === card.id).length >= 4) return;
+    if (currentCards.length >= 60) return;
+    const count = currentCards.filter(x => x.id === card.id).length;
+    if (count >= 4) { alert("동일 카드 4장 제한"); return; }
     setCurrentCards(Engine.sortDeck([...currentCards, { ...card, instanceId: Math.random() }]));
   };
   const handleRemove = (e, instId) => {
@@ -77,16 +87,18 @@ function UI_DeckEditor({ deck, onSave, onBack }) {
         <div className="header-btns"><button className="menu-btn primary" onClick={() => onSave(currentCards)}>SAVE</button><button className="menu-btn" onClick={onBack}>BACK</button></div>
       </div>
       <div className="editor-body">
-        <div className="deck-view"><h3>MY DECK</h3><div className="editor-grid">{currentCards.map((c, i) => (<div key={c.instanceId || i} className="editor-card-wrapper" onContextMenu={(e) => handleRemove(e, c.instanceId)}><UI_Card card={c} isPlayerSide /></div>))}</div></div>
-        <div className="library-view"><h3>LIBRARY</h3><div className="editor-grid">{CARD_LIBRARY.map((c, i) => (<div key={c.id || i} className="editor-card-wrapper" onContextMenu={(e) => handleAdd(e, c)}><UI_Card card={c} isPlayerSide /></div>))}</div></div>
+        <div className="deck-view"><h3>MY DECK</h3><div className="editor-grid">{currentCards.map((c, i) => (<div key={c.instanceId || i} className="editor-card-wrapper" onContextMenu={(e) => handleRemove(e, c.instanceId)}><UI_Card card={c} isPlayerSide={true} /></div>))}</div></div>
+        <div className="library-view"><h3>LIBRARY</h3><div className="editor-grid">{CARD_LIBRARY.map((c, i) => (<div key={c.id || i} className="editor-card-wrapper" onContextMenu={(e) => handleAdd(e, c)}><UI_Card card={c} isPlayerSide={true} /></div>))}</div></div>
       </div>
     </div>
   );
 }
 
-// --- [SECTION 3] 메인 앱 컴포넌트 ---
+// =============================================================================
+// [SECTION 3] 메인 앱 컴포넌트
+// =============================================================================
 export default function App() {
-  // 1. 시스템 및 뷰 상태
+  // 1. 상태 관리
   const [currentView, setCurrentView] = useState('MENU'); 
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [roomCode, setRoomCode] = useState("");
@@ -95,14 +107,10 @@ export default function App() {
   const [myPlayerNumber, setMyPlayerNumber] = useState(null); 
   const [playerCount, setPlayerCount] = useState(0);
 
-  // 2. 덱 및 준비 상태 (Prefix: lobby_)
   const [savedDecks, setSavedDecks] = useState(JSON.parse(localStorage.getItem('nabla_decks')) || [{id: 'd1', name: 'Starter Deck', cards: []}]);
   const [editingDeck, setEditingDeck] = useState(null);
   const [selectedDeckId, setSelectedDeckId] = useState(savedDecks[0]?.id);
-  const [lobby_isPReady, setLobby_isPReady] = useState(false);
-  const [lobby_isOReady, setLobby_isOReady] = useState(false);
 
-  // 3. 인게임 엔진 상태 (Prefix: game_)
   const [game_phase, setGame_phase] = useState('START'); 
   const [game_turnOwner, setGame_turnOwner] = useState(0); 
   const [game_totalTurns, setGame_totalTurns] = useState(1); 
@@ -121,7 +129,10 @@ export default function App() {
   const [ui_notification, setUi_notification] = useState(""); 
   const [doomedIds, setDoomedIds] = useState(new Set());
 
-  // 4. 핵심 로직 콜백 (Hoisting 문제 해결)
+  const [lobby_isPReady, setLobby_isPReady] = useState(false);
+  const [lobby_isOReady, setLobby_isOReady] = useState(false);
+
+  // 2. 핵심 로직 콜백
   const showNotif = useCallback((msg) => {
     setUi_notification(msg);
     setTimeout(() => setUi_notification(""), 1500);
@@ -182,7 +193,7 @@ export default function App() {
       const act = tempChain.pop(); const { card, targetId } = act;
       newPS = newPS.filter(s => s.instanceId !== card.instanceId); newOS = newOS.filter(s => s.instanceId !== card.instanceId);
       let target = newPM.find(m => m.instanceId === targetId) || newOM.find(m => m.instanceId === targetId);
-      if (target && act.effect === 'DIFF') {
+      if (target && action.effect === 'DIFF') {
         const next = Engine.checkDestruction(derivative(target.formula, 'x').toString(), activeField);
         if (next.destroyed) { newPM = newPM.filter(m => m.instanceId !== act.targetId); newOM = newOM.filter(m => m.instanceId !== act.targetId); }
         else target.formula = next.formula;
@@ -201,7 +212,7 @@ export default function App() {
     showNotif(firstTurn === myPlayerNumber ? "YOU GO FIRST" : "YOU GO SECOND");
   }, [myPlayerNumber, showNotif]);
 
-  // 5. 소켓 이벤트 리스너
+  // 3. 소켓 이벤트 리스너
   useEffect(() => {
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
@@ -243,7 +254,7 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem('nabla_decks', JSON.stringify(savedDecks)); }, [savedDecks]);
 
-  // 6. 핸들러
+  // 4. 핸들러
   const handleHandClick = (card, idx) => {
     if (!isCardPlayable(card, true)) return;
     if (game_phase === 'SETUP') {
@@ -262,14 +273,19 @@ export default function App() {
     setLobby_isPReady(true); socket.emit('READY_TO_START', { roomCode, deck: Engine.shuffle(d.cards) });
   };
 
-  // --- [E] 화면 렌더링 분기 (변수명 currentView로 일치됨) ---
+  // 5. 뷰 렌더링 분기
   if (currentView === 'MENU') return <UI_Menu setCurrentView={setCurrentView} isConnected={isConnected} showJoinInput={showJoinInput} setShowJoinInput={setShowJoinInput} inputCode={inputCode} setInputCode={setInputCode} onJoin={() => socket.emit('JOIN_ROOM', inputCode)} />;
   
   if (currentView === 'DECK_LIST') return (
     <div className="menu-screen deck-list-view">
       <h1 className="game-title small">MY DECKS</h1>
       <div className="deck-grid">
-        {savedDecks.map(d => (<div key={d.id} className="deck-slot" onClick={() => { setEditingDeck(d); setCurrentView('DECK_EDITOR'); }}><div className="deck-slot-name">{d.name}</div><div className="deck-slot-count">{d.cards.length} Cards</div></div>))}
+        {savedDecks.map(d => (
+          <div key={d.id} className="deck-slot" onClick={() => { setEditingDeck(d); setCurrentView('DECK_EDITOR'); }}>
+            <div className="deck-slot-name">{d.name}</div>
+            <div className="deck-slot-count">{d.cards.length} Cards</div>
+          </div>
+        ))}
         <div className="deck-slot add-new" onClick={() => setSavedDecks([...savedDecks, {id: Date.now().toString(), name: 'New Deck', cards: []}])}><span>+ NEW DECK</span></div>
       </div>
       <button className="menu-btn" onClick={() => setCurrentView('MENU')}>BACK</button>
@@ -278,7 +294,7 @@ export default function App() {
 
   if (currentView === 'DECK_EDITOR') return <UI_DeckEditor deck={editingDeck} onBack={() => setCurrentView('DECK_LIST')} onSave={(c) => { 
     const updated = savedDecks.map(d => d.id === editingDeck.id ? {...editingDeck, cards: c} : d);
-    setSavedDecks(updated); localStorage.setItem('nabla_decks', JSON.stringify(updated)); setCurrentView('DECK_LIST');
+    setSavedDecks(updated); localStorage.setItem('nabla_decks', JSON.stringify(updated)); setCurrentView('DECK_LIST'); 
   }} />;
 
   if (currentView === 'DUEL_MENU') return (
@@ -286,13 +302,10 @@ export default function App() {
   );
 
   if (currentView === 'ROOM_LOBBY') return (
-    <div className="menu-screen">
-      <h1 className="game-title small">MULTI PLAY</h1>
-      <div className="menu-main vertical">
-        {!showJoinInput ? (<><button className="menu-btn large" onClick={() => socket.emit('CREATE_ROOM')}>CREATE ROOM</button><button className="menu-btn large" onClick={() => setShowJoinInput(true)}>JOIN ROOM</button><button className="menu-btn large" onClick={() => setCurrentView('DUEL_MENU')}>BACK</button></>) : 
-        (<div className="join-input-container"><input className="room-code-input" type="text" placeholder="CODE" value={inputCode} onChange={(e)=>setInputCode(e.target.value.toUpperCase())} /><div className="join-btns"><button className="menu-btn primary" onClick={() => socket.emit('JOIN_ROOM', inputCode)}>JOIN</button><button className="menu-btn" onClick={() => setShowJoinInput(false)}>CANCEL</button></div></div>)}
-      </div>
-    </div>
+    <div className="menu-screen"><h1 className="game-title small">MULTI PLAY</h1><div className="menu-main vertical">
+      {!showJoinInput ? (<><button className="menu-btn large" onClick={() => socket.emit('CREATE_ROOM')}>CREATE ROOM</button><button className="menu-btn large" onClick={() => setShowJoinInput(true)}>JOIN ROOM</button><button className="menu-btn large" onClick={() => setCurrentView('DUEL_MENU')}>BACK</button></>) : 
+      (<div className="join-input-container"><input className="room-code-input" type="text" placeholder="CODE" value={inputCode} onChange={(e)=>setInputCode(e.target.value.toUpperCase())} /><div className="join-btns"><button className="menu-btn primary" onClick={() => socket.emit('JOIN_ROOM', inputCode)}>JOIN</button><button className="menu-btn" onClick={() => setShowJoinInput(false)}>CANCEL</button></div></div>)}
+    </div></div>
   );
 
   if (currentView === 'LOBBY') return (
@@ -310,7 +323,6 @@ export default function App() {
     </div>
   );
 
-  // 인게임 화면 (currentView === 'GAME')
   return (
     <div className="game-container" onContextMenu={(e)=>{ e.preventDefault(); setGame_selectedAction(null); }}>
       {ui_notification && <div className="phase-notification">{ui_notification}</div>}
@@ -327,11 +339,11 @@ export default function App() {
               <button className="pass-btn" onClick={handlePass} disabled={game_priorityOwner !== myPlayerNumber}>PASS</button>}
             </div>
           </div>
-          <div className="zone monster-zone player-side">{[0,1,2].map(i => (<div key={`pm-${i}`} className="slot">{pMonsters[i] && <UI_Card card={pMonsters[i]} isPlayerSide isFacedown={pMonsters[i].isFacedown} />}</div>))}</div>
-          <div className="zone spell-zone player-side">{[0,1,2].map(i => <div key={`ps-${i}`} className="slot" onClick={() => pSpells[i] && netEmit('ADD_TO_CHAIN', {card: pSpells[i], targetId: null})}>{pSpells[i] && <UI_Card card={pSpells[i]} isPlayerSide />}</div>)}</div>
+          <div className="zone monster-zone player-side">{[0,1,2].map(i => (<div key={`pm-${i}`} className="slot">{pMonsters[i] && <UI_Card card={pMonsters[i]} isPlayerSide={true} isFacedown={pMonsters[i].isFacedown} />}</div>))}</div>
+          <div className="zone spell-zone player-side">{[0,1,2].map(i => <div key={`ps-${i}`} className="slot" onClick={() => pSpells[i] && netEmit('ADD_TO_CHAIN', {card: pSpells[i], targetId: null})}>{pSpells[i] && <UI_Card card={pSpells[i]} isPlayerSide={true} />}</div>)}</div>
         </div>
       </div>
-      <div className="hand-container bottom">{pHand.map((c, i) => <UI_Card key={`ph-${i}`} card={c} isPlayerSide isHand isPlayable={isCardPlayable(c, true)} onClick={() => handleHandClick(c, i)} />)}</div>
+      <div className="hand-container bottom">{pHand.map((c, i) => <UI_Card key={`ph-${i}`} card={c} isPlayerSide={true} isHand={true} isPlayable={isCardPlayable(c, true)} onClick={() => handleHandClick(c, i)} />)}</div>
     </div>
   );
 }
