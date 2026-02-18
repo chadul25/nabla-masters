@@ -117,3 +117,41 @@ body { margin: 0; padding: 0; background: var(--bg); color: white; font-family: 
   z-index: 100;
   position: relative;
 }
+
+/* --- [인게임 패치] 턴 구분에 따른 탭 색상 고정 --- */
+.player-turn-tab {
+  background: rgba(41, 128, 185, 0.95) !important; /* 선명한 파랑 */
+  border: 2px solid #3498db !important;
+  box-shadow: 0 0 15px rgba(52, 152, 219, 0.5);
+}
+
+.opponent-turn-tab {
+  background: rgba(192, 57, 43, 0.95) !important; /* 선명한 빨강 */
+  border: 2px solid #e74c3c !important;
+  box-shadow: 0 0 15px rgba(231, 76, 60, 0.5);
+}
+
+/* --- [인게임 패치] 대형 스플래시 텍스트 알림 --- */
+.phase-notification {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 6rem;
+  font-weight: 900;
+  color: white;
+  text-shadow: 0 0 30px black, 0 0 10px var(--gold);
+  z-index: 2000;
+  pointer-events: none;
+  animation: splashFade 1.5s forwards;
+  letter-spacing: 5px;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+@keyframes splashFade {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+  80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+}
